@@ -6,10 +6,10 @@ export { parseArgs };
 
 function printHelp() {
   // eslint-disable-next-line no-console
-  console.log(`ytdlp-ui
+  console.log(`youtube
 
 Usage:
-  ytdlp-ui [--port 8787] [--host 0.0.0.0] [--open|--no-open]
+  youtube [--port 8787] [--host 0.0.0.0] [--open|--no-open]
 
 Env:
   YTDLP_UI_PORT, YTDLP_UI_HOST, YTDLP_BIN
@@ -51,7 +51,7 @@ async function openBrowser(url) {
   server.listen(port, host, async () => {
     const url = `http://${host}:${port}`;
     // eslint-disable-next-line no-console
-    console.log(`yt-dlp UI running on ${url}`);
+    console.log(`youtube running on ${url}`);
     if (shouldOpen) await openBrowser(url);
   });
 

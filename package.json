@@ -5,6 +5,7 @@
   "type": "module",
   "main": "./server.mjs",
   "bin": {
+    "youtube": "./cli.mjs",
     "ytdlp-ui": "./cli.mjs"
   },
   "scripts": {
