@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>yt-dlp UI</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 18px; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+      label { display: block; font-size: 12px; opacity: 0.8; margin-bottom: 4px; }
+      input[type="text"] { width: min(820px, 100%); padding: 10px; border: 1px solid rgba(127,127,127,0.35); border-radius: 10px; }
+      button { padding: 10px 12px; border: 1px solid rgba(127,127,127,0.35); border-radius: 10px; background: transparent; cursor: pointer; }
+      button.primary { background: #2563eb; color: white; border-color: #2563eb; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .card { border: 1px solid rgba(127,127,127,0.25); border-radius: 14px; padding: 14px; margin-top: 14px; }
+      .muted { opacity: 0.75; font-size: 13px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th, td { padding: 8px; border-bottom: 1px solid rgba(127,127,127,0.2); vertical-align: top; }
+      th { text-align: left; font-size: 12px; opacity: 0.75; }
+      .title { font-weight: 600; }
+      .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(127,127,127,0.35); display: inline-block; }
+      .log { height: 260px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; white-space: pre-wrap; background: rgba(127,127,127,0.08); padding: 10px; border-radius: 12px; }
+      .split { display: grid; grid-template-columns: 1fr; gap: 12px; }
+      @media (min-width: 980px) { .split { grid-template-columns: 2fr 1fr; } }
+      a { color: inherit; }
+      .sticky-actions { position: sticky; bottom: 0; background: color-mix(in oklab, Canvas 92%, transparent); padding-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h2 style="margin: 0 0 6px 0;">yt-dlp Shorts Downloader</h2>
+      <div class="muted">This UI calls a backend that runs <span class="pill">yt-dlp</span>. Only download videos you own / have rights to.</div>
+      <div class="card" id="doctorCard" style="display:none;">
+        <div class="row" style="justify-content: space-between;">
+          <div>
+            <div class="title">yt-dlp status</div>
+            <div class="muted" id="doctorText"></div>
+          </div>
+          <div class="muted" id="doctorCmd"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div style="flex: 1 1 680px;">
+            <label for="url">Channel / Shorts URL</label>
+            <input id="url" type="text" value="https://www.youtube.com/@Grinly2/shorts" />
+          </div>
+          <div>
+            <button id="loadBtn" class="primary">Load videos</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <div style="flex: 1 1 520px;">
+            <label for="filter">Filter</label>
+            <input id="filter" type="text" placeholder="search titles..." />
+          </div>
+          <div>
+            <button id="selectAllBtn">Select all</button>
+            <button id="selectNoneBtn">Select none</button>
+          </div>
+          <div class="muted" id="count">0 videos</div>
+        </div>
+
+        <div style="overflow:auto; margin-top: 8px;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 36px;"></th>
+                <th>Title</th>
+                <th style="width: 160px;">Video</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="card">
+          <div class="row">
+            <div style="flex: 1 1 680px;">
+              <label for="outDir">Download folder path (server-side)</label>
+              <input id="outDir" type="text" placeholder="e.g. /downloads/channel-name" />
+              <div class="muted" style="margin-top: 6px;">Important: when hosted, this path is on the server, not your computer.</div>
+            </div>
+          </div>
+          <div class="row" style="margin-top: 10px;">
+            <div>
+              <label><input id="useCookies" type="checkbox" /> Use cookies from browser (for private/unlisted)</label>
+              <div class="row" style="margin-top: 6px;">
+                <select id="browser" style="padding: 10px; border-radius: 10px; border: 1px solid rgba(127,127,127,0.35);">
+                  <option value="chrome">chrome</option>
+                  <option value="edge">edge</option>
+                  <option value="firefox">firefox</option>
+                </select>
+              </div>
+            </div>
+            <div class="sticky-actions" style="margin-left:auto;">
+              <button id="downloadBtn" class="primary" disabled>Download selected</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row" style="justify-content: space-between;">
+            <div>
+              <div class="title">Progress</div>
+              <div class="muted" id="status">Idle</div>
+            </div>
+            <div>
+              <button id="clearLogBtn">Clear log</button>
+            </div>
+          </div>
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const el = (id) => document.getElementById(id);
+      const state = {
+        videos: [],
+        selected: new Set(),
+        jobId: localStorage.getItem("ytdlp_jobId") || "",
+        evt: null,
+      };
+
+      function log(line) {
+        const box = el("log");
+        box.textContent += line + "\n";
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function setStatus(s) {
+        el("status").textContent = s;
+      }
+
+      function render() {
+        const filter = el("filter").value.toLowerCase().trim();
+        const rows = el("rows");
+        rows.innerHTML = "";
+        let shown = 0;
+        for (const v of state.videos) {
+          if (filter && !(v.title || "").toLowerCase().includes(filter) && !(v.id || "").includes(filter)) continue;
+          shown++;
+          const tr = document.createElement("tr");
+          const checked = state.selected.has(v.id);
+          tr.innerHTML = `
+            <td><input type="checkbox" ${checked ? "checked" : ""} data-id="${v.id}" /></td>
+            <td>
+              <div class="title">${escapeHtml(v.title || "(no title)")}</div>
+              <div class="muted">${escapeHtml(v.id)}</div>
+            </td>
+            <td><a href="${v.url}" target="_blank" rel="noreferrer">open</a></td>
+          `;
+          rows.appendChild(tr);
+        }
+        el("count").textContent = `${shown} shown • ${state.videos.length} total • ${state.selected.size} selected`;
+        el("downloadBtn").disabled = state.selected.size === 0;
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+      }
+
+      async function apiGet(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(await res.text());
+        return await res.json();
+      }
+
+      async function apiPost(url, body) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return await res.json();
+      }
+
+      async function loadVideos() {
+        setStatus("Loading list…");
+        const url = el("url").value.trim();
+        const data = await apiGet(`/api/list?url=${encodeURIComponent(url)}`);
+        state.videos = data.videos || [];
+        state.selected = new Set();
+        setStatus(`Loaded ${state.videos.length} videos`);
+        log(`[list] loaded ${state.videos.length} items`);
+        render();
+      }
+
+      function connectSse(jobId) {
+        if (!jobId) return;
+        if (state.evt) state.evt.close();
+        setStatus(`Downloading… (job ${jobId})`);
+        const evt = new EventSource(`/api/events/${encodeURIComponent(jobId)}`);
+        state.evt = evt;
+        evt.addEventListener("log", (e) => {
+          try { log(JSON.parse(e.data).line); } catch { log(String(e.data)); }
+        });
+        evt.addEventListener("done", (e) => {
+          const payload = JSON.parse(e.data);
+          log(`[done] exitCode=${payload.exitCode}`);
+          setStatus(payload.exitCode === 0 ? "Done" : "Done (with errors)");
+          localStorage.removeItem("ytdlp_jobId");
+          state.jobId = "";
+          evt.close();
+        });
+        evt.addEventListener("error", () => {
+          log("[sse] disconnected");
+          setStatus("Disconnected (refresh to reconnect if job still running)");
+        });
+      }
+
+      async function startDownload() {
+        const outDir = el("outDir").value.trim();
+        const ids = Array.from(state.selected);
+        const useCookies = el("useCookies").checked;
+        const browser = el("browser").value;
+        if (!outDir) { alert("Please enter a download folder path"); return; }
+        setStatus("Starting download…");
+        const resp = await apiPost("/api/download", { ids, outDir, cookiesFromBrowser: useCookies ? browser : null });
+        const jobId = resp.jobId;
+        localStorage.setItem("ytdlp_jobId", jobId);
+        state.jobId = jobId;
+        log(`[start] jobId=${jobId} items=${ids.length}`);
+        connectSse(jobId);
+      }
+
+      el("loadBtn").addEventListener("click", () => loadVideos().catch((e) => { setStatus("Error"); alert(e.message); }));
+      el("filter").addEventListener("input", () => render());
+      el("rows").addEventListener("change", (e) => {
+        const t = e.target;
+        if (t && t.matches("input[type=checkbox][data-id]")) {
+          const id = t.getAttribute("data-id");
+          if (t.checked) state.selected.add(id); else state.selected.delete(id);
+          render();
+        }
+      });
+      el("selectAllBtn").addEventListener("click", () => { state.selected = new Set(state.videos.map(v => v.id)); render(); });
+      el("selectNoneBtn").addEventListener("click", () => { state.selected = new Set(); render(); });
+      el("downloadBtn").addEventListener("click", () => startDownload().catch((e) => { setStatus("Error"); alert(e.message); }));
+      el("clearLogBtn").addEventListener("click", () => { el("log").textContent = ""; });
+
+      // auto-reconnect if a job is still stored
+      if (state.jobId) {
+        log(`[resume] reconnecting to job ${state.jobId}`);
+        connectSse(state.jobId);
+      }
+
+      // show yt-dlp diagnostics
+      (async () => {
+        try {
+          const d = await apiGet("/api/doctor");
+          const card = el("doctorCard");
+          card.style.display = "block";
+          el("doctorCmd").textContent = d.ytDlpCommand ? `bin: ${d.ytDlpCommand}` : "";
+          if (d.ok) {
+            el("doctorText").textContent = d.message || "OK";
+          } else {
+            el("doctorText").textContent = (d.message || "yt-dlp not available");
+          }
+        } catch (e) {
+          // ignore
+        }
+      })();
+    </script>
+  </body>
+</html>
+
+
