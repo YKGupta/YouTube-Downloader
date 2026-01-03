@@ -4,75 +4,358 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>yt-dlp UI (local)</title>
+    <meta name="theme-color" content="#3ecf8e" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <style>
-      :root { color-scheme: light dark; }
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; }
-      .wrap { max-width: 1100px; margin: 0 auto; padding: 18px; }
+      :root {
+        color-scheme: light dark;
+        --bg: #fbfbfb;
+        --panel: #ffffff;
+        --text: #0a0a0a;
+        --muted: rgba(10, 10, 10, 0.64);
+        --muted2: rgba(10, 10, 10, 0.48);
+        --border: rgba(10, 10, 10, 0.06);
+        --border2: rgba(10, 10, 10, 0.10);
+        --shadow: 0 1px 2px rgba(0,0,0,0.04);
+        --accent: #3ecf8e;
+        --accentText: #052e1a;
+        --danger: #dc2626;
+        --ok: #16a34a;
+        --radius: 14px;
+        --radiusSm: 10px;
+        --focus: 0 0 0 4px rgba(62, 207, 142, 0.18);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0b0d;
+          --panel: #111114;
+          --text: #f5f5f6;
+          --muted: rgba(245, 245, 246, 0.72);
+          --muted2: rgba(245, 245, 246, 0.52);
+          --border: rgba(255, 255, 255, 0.07);
+          --border2: rgba(255, 255, 255, 0.11);
+          --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 18px 50px rgba(0,0,0,0.40);
+          --accentText: #062213;
+          --focus: 0 0 0 4px rgba(62, 207, 142, 0.22);
+        }
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        background: var(--bg);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+        letter-spacing: -0.01em;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 86%, var(--bg));
+        backdrop-filter: blur(10px);
+      }
+      .topbar-inner {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 12px 24px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        justify-content: space-between;
+      }
+      .topbar-left { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+      .appmark {
+        width: 28px;
+        height: 28px;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 8px 22px rgba(0,0,0,0.08);
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 92%, transparent);
+        display: grid;
+        place-items: center;
+      }
+      .appmark img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+      }
+      .brand { font-weight: 700; letter-spacing: -0.02em; }
+      .badge {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--muted2);
+      }
+      .topbar-search {
+        flex: 1 1 auto;
+        max-width: 620px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 92%, transparent);
+        color: var(--muted2);
+      }
+      .topbar-search:focus-within { border-color: rgba(62,207,142,0.55); box-shadow: var(--focus); }
+      .topbar-search input {
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        width: 100%;
+        padding: 8px 2px;
+        font-size: 14px;
+      }
+      .topbar-search input::placeholder { color: var(--muted2); }
+      .btn.sm { padding: 9px 12px; border-radius: 999px; }
+      .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+      .main { padding: 24px; }
+      .container { max-width: 1120px; margin: 0 auto; }
+      .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+      .titleblock { min-width: min(420px, 100%); }
+      .head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 86%, transparent);
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .dot { width: 8px; height: 8px; border-radius: 999px; background: rgba(148,163,184,0.9); }
+      .dot.ok { background: var(--accent); }
+      .dot.bad { background: var(--danger); }
+
+      h1 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -0.03em; }
+      .sub { color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 72ch; }
+
+      .grid { display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 18px; }
+      @media (min-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: color-mix(in oklab, var(--panel) 92%, transparent);
+        box-shadow: var(--shadow);
+      }
+      .card-header { padding: 14px 14px 0 14px; }
+      .card-body { padding: 14px; }
+      .card-title { font-weight: 650; font-size: 13px; color: var(--muted); margin: 0; }
+
       .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
-      label { display: block; font-size: 12px; opacity: 0.8; margin-bottom: 4px; }
-      input[type="text"] { width: min(820px, 100%); padding: 10px; border: 1px solid rgba(127,127,127,0.35); border-radius: 10px; }
-      select { padding: 10px; border-radius: 10px; border: 1px solid rgba(127,127,127,0.35); background: transparent; }
-      button { padding: 10px 12px; border: 1px solid rgba(127,127,127,0.35); border-radius: 10px; background: transparent; cursor: pointer; }
-      button.primary { background: #2563eb; color: white; border-color: #2563eb; }
-      button:disabled { opacity: 0.5; cursor: not-allowed; }
-      .card { border: 1px solid rgba(127,127,127,0.25); border-radius: 14px; padding: 14px; margin-top: 14px; }
-      .muted { opacity: 0.75; font-size: 13px; }
-      .ok { color: #16a34a; }
-      .bad { color: #dc2626; }
-      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-      th, td { padding: 8px; border-bottom: 1px solid rgba(127,127,127,0.2); vertical-align: top; }
-      th { text-align: left; font-size: 12px; opacity: 0.75; }
-      .title { font-weight: 600; }
-      .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(127,127,127,0.35); display: inline-block; }
-      .log { height: 260px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; white-space: pre-wrap; background: rgba(127,127,127,0.08); padding: 10px; border-radius: 12px; }
-      .split { display: grid; grid-template-columns: 1fr; gap: 12px; }
-      @media (min-width: 980px) { .split { grid-template-columns: 2fr 1fr; } }
-      a { color: inherit; }
-      .sticky-actions { position: sticky; bottom: 0; background: color-mix(in oklab, Canvas 92%, transparent); padding-top: 10px; }
-      .tabs { display: flex; gap: 8px; margin-top: 12px; }
-      .tab { padding: 8px 10px; border-radius: 999px; border: 1px solid rgba(127,127,127,0.35); cursor: pointer; user-select: none; }
-      .tab.active { background: rgba(37,99,235,0.16); border-color: rgba(37,99,235,0.5); }
+      .field { flex: 1 1 520px; min-width: min(520px, 100%); }
+      label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+
+      input[type="text"], select {
+        width: 100%;
+        padding: 11px 12px;
+        border-radius: var(--radiusSm);
+        border: 1px solid var(--border2);
+        background: color-mix(in oklab, var(--panel) 92%, transparent);
+        color: var(--text);
+        outline: none;
+      }
+      input[type="text"]::placeholder { color: var(--muted2); }
+      input[type="text"]:focus, select:focus { box-shadow: var(--focus); border-color: rgba(62,207,142,0.55); }
+
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        gap: 8px;
+        padding: 11px 14px;
+        border-radius: var(--radiusSm);
+        border: 1px solid transparent;
+        background: color-mix(in oklab, var(--panel) 94%, transparent);
+        color: var(--text);
+        cursor: pointer;
+        user-select: none;
+      }
+      .btn:hover { border-color: var(--border2); }
+      .btn:active { transform: translateY(0.5px); }
+      .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+      .btn.primary {
+        border-color: transparent;
+        background: linear-gradient(180deg, rgba(62,207,142,1), rgba(46, 191, 125, 1));
+        color: var(--accentText);
+      }
+      .btn.ghost { background: transparent; }
+
+      .seg {
+        display: inline-flex;
+        gap: 4px;
+        padding: 4px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 88%, transparent);
+      }
+      .seg button {
+        border: 0;
+        background: transparent;
+        padding: 8px 10px;
+        border-radius: 999px;
+        color: var(--muted);
+        cursor: pointer;
+        font-weight: 550;
+      }
+      .seg button[aria-selected="true"] {
+        background: color-mix(in oklab, var(--panel) 94%, transparent);
+        color: var(--text);
+        box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+        border: 1px solid var(--border);
+      }
+
+      .seg.compact { padding: 3px; gap: 2px; }
+      .seg.compact button { padding: 7px 9px; font-size: 12px; }
+
+      .status-line { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+      .status-line strong { color: var(--text); font-weight: 650; }
+      .okText { color: var(--ok); font-weight: 650; }
+      .badText { color: var(--danger); font-weight: 650; }
+
+      table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 10px; }
+      thead th {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted2);
+        padding: 10px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      tbody td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+      tbody tr:hover { background: color-mix(in oklab, var(--panel) 86%, rgba(62,207,142,0.06)); }
+      .title { font-weight: 650; }
+      a { color: inherit; text-decoration: none; opacity: 0.9; }
+      a:hover { text-decoration: underline; opacity: 1; }
+
+      .log {
+        height: 220px;
+        overflow: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 88%, transparent);
+        padding: 12px;
+        color: color-mix(in oklab, var(--text) 84%, var(--muted));
+      }
+
+      .footer-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+      .hint { color: var(--muted2); font-size: 12px; }
+
+      .progress-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+      .progress-meta { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: min(360px, 100%); }
+      .progress-text { color: var(--muted); font-size: 13px; }
+      .bar {
+        position: relative;
+        height: 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 92%, transparent);
+        overflow: hidden;
+        flex: 1 1 420px;
+        min-width: min(420px, 100%);
+      }
+      .bar > span {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 0%;
+        background: linear-gradient(90deg, rgba(62,207,142,0.55), rgba(62,207,142,1));
+        border-radius: 999px;
+        transition: width 180ms ease;
+      }
+      .bar.indeterminate > span {
+        width: 40%;
+        animation: indet 1.15s ease-in-out infinite;
+      }
+      @keyframes indet {
+        0% { transform: translateX(-110%); }
+        100% { transform: translateX(260%); }
+      }
+
+      details.logbox { margin-top: 10px; }
+      details.logbox > summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      details.logbox > summary::-webkit-details-marker { display: none; }
+      .chev { width: 14px; height: 14px; transition: transform 160ms ease; }
+      details[open] .chev { transform: rotate(180deg); }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <h2 style="margin: 0 0 6px 0;">yt-dlp Downloader (local)</h2>
-      <div class="muted">Runs <span class="pill">yt-dlp</span> on your machine. Downloads will save to your browser’s default Downloads folder.</div>
-
-      <div class="card" id="doctorCard" style="display:none;">
-        <div class="row" style="justify-content: space-between;">
-          <div>
-            <div class="title">yt-dlp status</div>
-            <div class="muted" id="doctorText"></div>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <div class="appmark" aria-hidden="true">
+            <img src="/favicon-32x32.png" alt="" />
           </div>
-          <div class="muted" id="doctorCmd"></div>
+          <div class="brand">YouTube</div>
+        </div>
+
+        <div class="topbar-search" aria-label="URL input">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.5 18a7.5 7.5 0 1 1 0-15a7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="1.5"></path>
+            <path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+          </svg>
+          <input id="urlInput" type="text" placeholder="Paste a YouTube video URL…" autocomplete="off" />
+          <div class="seg compact" role="tablist" aria-label="Mode" style="margin-left:auto;">
+            <button id="tabVideo" role="tab" aria-selected="true" type="button">Video</button>
+            <button id="tabPlaylist" role="tab" aria-selected="false" type="button">Playlist</button>
+          </div>
+          <button id="checkBtn" class="btn primary sm" type="button">Check</button>
+          <button id="loadPlaylistBtn" class="btn primary sm" type="button" style="display:none;">Load</button>
+        </div>
+
+        <div class="topbar-right">
+          <div class="pill" id="doctorPill" style="display:none;">
+            <span class="dot" id="doctorDot" aria-hidden="true"></span>
+            <span id="doctorTextInline">Checking yt-dlp…</span>
+          </div>
         </div>
       </div>
+    </header>
 
-      <div class="tabs">
-        <div class="tab active" id="tabVideo">Single video</div>
-        <div class="tab" id="tabPlaylist">Playlist</div>
-      </div>
+    <main class="main">
+      <div class="container">
+        <div class="page-head">
+          <div class="titleblock">
+            <h1>Downloads</h1>
+            <div class="sub">Paste a URL above, choose options below, then download the generated files.</div>
+          </div>
+        </div>
 
-      <div class="split">
-        <div class="card">
+        <div class="grid">
+        <section class="card">
           <div id="panelVideo">
-            <div class="row">
-              <div style="flex: 1 1 680px;">
-                <label for="videoUrl">YouTube video URL</label>
-                <input id="videoUrl" type="text" placeholder="https://www.youtube.com/watch?v=..." />
-              </div>
-              <div>
-                <button id="checkBtn" class="primary">Check</button>
-              </div>
-            </div>
+            <div class="card-body">
+            <div class="status-line" id="videoStatus">Enter a URL and click <strong>Check</strong>.</div>
+            <div class="status-line" id="videoTitle"></div>
 
-            <div class="card" style="margin-top: 12px;">
-              <div class="title">Status</div>
-              <div class="muted" id="videoStatus">Enter a URL and click Check.</div>
-              <div class="muted" id="videoTitle" style="margin-top: 6px;"></div>
-
-              <div class="row" style="margin-top: 10px;">
+              <div class="row" style="margin-top: 12px;">
                 <div>
                   <label for="quality">Quality</label>
                   <select id="quality" disabled>
@@ -82,34 +365,44 @@
                 <div>
                   <label><input id="mp3" type="checkbox" /> MP3 only</label>
                 </div>
-                <div class="sticky-actions" style="margin-left:auto;">
-                  <button id="downloadVideoBtn" class="primary" disabled>Download</button>
+                <div style="margin-left:auto;">
+                  <button id="downloadVideoBtn" class="btn primary" disabled type="button">Download</button>
                 </div>
               </div>
-            </div>
+
+              <div class="progress-row">
+                <div class="progress-meta">
+                  <span class="dot" id="progressDot" aria-hidden="true"></span>
+                  <div class="progress-text" id="status">Idle</div>
+                </div>
+                <div class="bar" id="progressBar" aria-label="Download progress"><span id="progressFill"></span></div>
+                <button id="clearLogBtn" class="btn ghost" type="button">Clear log</button>
+              </div>
+
+              <details class="logbox" id="logDetails">
+                <summary>
+                  <svg class="chev" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  </svg>
+                  Show log
+                </summary>
+                <div class="log" id="log" style="margin-top: 10px;"></div>
+              </details>
+          </div>
           </div>
 
           <div id="panelPlaylist" style="display:none;">
-            <div class="row">
-              <div style="flex: 1 1 680px;">
-                <label for="playlistUrl">Playlist URL</label>
-                <input id="playlistUrl" type="text" placeholder="https://www.youtube.com/playlist?list=..." />
-              </div>
-              <div>
-                <button id="loadPlaylistBtn" class="primary">Load</button>
-              </div>
-            </div>
-
+            <div class="card-body">
             <div class="row" style="margin-top: 10px;">
-              <div style="flex: 1 1 520px;">
+              <div class="field">
                 <label for="filter">Filter</label>
                 <input id="filter" type="text" placeholder="search titles..." />
               </div>
               <div>
-                <button id="selectAllBtn">Select all</button>
-                <button id="selectNoneBtn">Select none</button>
+                <button id="selectAllBtn" class="btn" type="button">Select all</button>
+                <button id="selectNoneBtn" class="btn" type="button">Select none</button>
               </div>
-              <div class="muted" id="count">0 videos</div>
+              <div class="hint" id="count">0 videos</div>
             </div>
 
             <div class="row" style="margin-top: 10px;">
@@ -126,12 +419,12 @@
               <div>
                 <label><input id="playlistMp3" type="checkbox" /> MP3 only</label>
               </div>
-              <div class="sticky-actions" style="margin-left:auto;">
-                <button id="downloadPlaylistBtn" class="primary" disabled>Download selected</button>
+              <div style="margin-left:auto;">
+                <button id="downloadPlaylistBtn" class="btn primary" disabled type="button">Download selected</button>
               </div>
             </div>
 
-            <div style="overflow:auto; margin-top: 8px;">
+            <div style="overflow:auto; margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius);">
               <table>
                 <thead>
                   <tr>
@@ -146,26 +439,18 @@
           </div>
 
           <div class="card" id="downloadsCard" style="display:none;">
-            <div class="title">Downloads</div>
-            <div class="muted" id="downloadsText">Ready.</div>
-            <div id="downloadsLinks" class="muted" style="margin-top: 8px;"></div>
+            <div class="card-body">
+              <div class="card-title">Downloads</div>
+              <div class="status-line" id="downloadsText">Ready.</div>
+              <div id="downloadsLinks" style="margin-top: 8px;"></div>
+              <div class="hint" style="margin-top: 10px;">If your browser blocks multiple downloads, click the links one by one.</div>
+            </div>
+          </div>
           </div>
         </div>
-
-        <div class="card">
-          <div class="row" style="justify-content: space-between;">
-            <div>
-              <div class="title">Progress</div>
-              <div class="muted" id="status">Idle</div>
-            </div>
-            <div>
-              <button id="clearLogBtn">Clear log</button>
-            </div>
-          </div>
-          <div class="log" id="log"></div>
         </div>
       </div>
-    </div>
+    </main>
 
     <script>
       const el = (id) => document.getElementById(id);
@@ -175,12 +460,30 @@
         jobId: localStorage.getItem("ytdlp_jobId") || "",
         evt: null,
         currentVideoOk: false,
+        mode: "video",
       };
+
+      function setProgress({ running, percent = null, text = null } = {}) {
+        const dot = el("progressDot");
+        const bar = el("progressBar");
+        const fill = el("progressFill");
+        if (dot) {
+          dot.classList.toggle("ok", Boolean(!running && percent === 100));
+          dot.classList.toggle("bad", false);
+        }
+        if (bar) bar.classList.toggle("indeterminate", Boolean(running && (percent === null || !Number.isFinite(percent))));
+        if (fill) fill.style.width = percent !== null && Number.isFinite(percent) ? `${Math.max(0, Math.min(100, percent))}%` : "0%";
+        if (text) setStatus(text);
+      }
 
       function log(line) {
         const box = el("log");
-        box.textContent += line + "\\n";
-        box.scrollTop = box.scrollHeight;
+        if (box) {
+          box.textContent += line + "\\n";
+          box.scrollTop = box.scrollHeight;
+        }
+        const m = String(line).match(/(\d+(?:\.\d+)?)%/);
+        if (m) setProgress({ running: true, percent: Number(m[1]) });
       }
 
       function setStatus(s) {
@@ -188,7 +491,7 @@
       }
 
       function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;" }[c]));
+        return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
       }
 
       async function apiGet(url) {
@@ -241,6 +544,7 @@
         if (!jobId) return;
         if (state.evt) state.evt.close();
         setStatus(`Downloading… (job ${jobId})`);
+        setProgress({ running: true, percent: null });
         const evt = new EventSource(`/api/events/${encodeURIComponent(jobId)}`);
         state.evt = evt;
         evt.addEventListener("log", (e) => {
@@ -250,6 +554,7 @@
           const payload = JSON.parse(e.data);
           log(`[done] exitCode=${payload.exitCode}`);
           setStatus(payload.exitCode === 0 ? "Done" : "Done (with errors)");
+          setProgress({ running: false, percent: 100 });
           evt.close();
 
           showDownloads(jobId);
@@ -282,11 +587,12 @@
         evt.addEventListener("error", () => {
           log("[sse] disconnected");
           setStatus("Disconnected (refresh to reconnect if job still running)");
+          setProgress({ running: false, percent: null });
         });
       }
 
       async function checkVideo() {
-        const url = el("videoUrl").value.trim();
+        const url = el("urlInput").value.trim();
         if (!url) { alert("Enter a video URL"); return; }
         el("videoStatus").textContent = "Checking…";
         el("videoTitle").textContent = "";
@@ -296,11 +602,11 @@
 
         const info = await apiGet(`/api/info?url=${encodeURIComponent(url)}`);
         if (!info.ok) {
-          el("videoStatus").innerHTML = `<span class="bad">${escapeHtml(info.message || "Not allowed to download this video by the creator")}</span>`;
+          el("videoStatus").innerHTML = `<span class="badText">${escapeHtml(info.message || "Not allowed to download this video by the creator")}</span>`;
           return;
         }
         state.currentVideoOk = true;
-        el("videoStatus").innerHTML = `<span class="ok">Downloadable</span>`;
+        el("videoStatus").innerHTML = `<span class="okText">Downloadable</span>`;
         el("videoTitle").textContent = info.title ? `Title: ${info.title}` : "";
 
         const q = el("quality");
@@ -317,7 +623,7 @@
       }
 
       async function startVideoDownload() {
-        const url = el("videoUrl").value.trim();
+        const url = el("urlInput").value.trim();
         if (!url) { alert("Enter a video URL"); return; }
         if (!state.currentVideoOk) { alert("Click Check first"); return; }
         const quality = el("quality").value ? Number(el("quality").value) : null;
@@ -333,7 +639,7 @@
 
       async function loadPlaylist() {
         setStatus("Loading playlist…");
-        const url = el("playlistUrl").value.trim();
+        const url = el("urlInput").value.trim();
         if (!url) { alert("Enter a playlist URL"); return; }
         const data = await apiGet(`/api/playlist?url=${encodeURIComponent(url)}`);
         state.videos = data.videos || [];
@@ -359,14 +665,28 @@
 
       function setMode(mode) {
         const isVideo = mode === "video";
-        el("tabVideo").classList.toggle("active", isVideo);
-        el("tabPlaylist").classList.toggle("active", !isVideo);
+        state.mode = mode;
+        el("tabVideo").setAttribute("aria-selected", String(isVideo));
+        el("tabPlaylist").setAttribute("aria-selected", String(!isVideo));
         el("panelVideo").style.display = isVideo ? "block" : "none";
         el("panelPlaylist").style.display = isVideo ? "none" : "block";
+        el("checkBtn").style.display = isVideo ? "inline-flex" : "none";
+        el("loadPlaylistBtn").style.display = isVideo ? "none" : "inline-flex";
+        el("urlInput").placeholder = isVideo ? "Paste a YouTube video URL…" : "Paste a playlist URL…";
+        state.currentVideoOk = false;
+        el("downloadVideoBtn").disabled = true;
+        el("quality").disabled = true;
+        el("videoStatus").innerHTML = isVideo ? 'Enter a URL and click <strong>Check</strong>.' : el("videoStatus").innerHTML;
       }
 
       el("tabVideo").addEventListener("click", () => setMode("video"));
       el("tabPlaylist").addEventListener("click", () => setMode("playlist"));
+      el("urlInput")?.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        if ((state.mode || "video") === "video") el("checkBtn").click();
+        else el("loadPlaylistBtn").click();
+      });
 
       el("checkBtn").addEventListener("click", () => checkVideo().catch((e) => { setStatus("Error"); alert(e.message); }));
       el("downloadVideoBtn").addEventListener("click", () => startVideoDownload().catch((e) => { setStatus("Error"); alert(e.message); }));
@@ -384,21 +704,27 @@
       el("selectAllBtn").addEventListener("click", () => { state.selected = new Set(state.videos.map(v => v.id)); renderPlaylist(); });
       el("selectNoneBtn").addEventListener("click", () => { state.selected = new Set(); renderPlaylist(); });
       el("downloadPlaylistBtn").addEventListener("click", () => startPlaylistDownload().catch((e) => { setStatus("Error"); alert(e.message); }));
-      el("clearLogBtn").addEventListener("click", () => { el("log").textContent = ""; });
+      el("clearLogBtn").addEventListener("click", () => {
+        const box = el("log");
+        if (box) box.textContent = "";
+        setProgress({ running: false, percent: null, text: "Idle" });
+      });
 
       if (state.jobId) {
         log(`[resume] reconnecting to job ${state.jobId}`);
         connectSse(state.jobId);
+      } else {
+        setProgress({ running: false, percent: null });
       }
 
       (async () => {
         try {
           const d = await apiGet("/api/doctor");
-          const card = el("doctorCard");
-          card.style.display = "block";
-          el("doctorCmd").textContent = d.ytDlpCommand ? `bin: ${d.ytDlpCommand}` : "";
-          if (d.ok) el("doctorText").textContent = d.message || "OK";
-          else el("doctorText").textContent = (d.message || "yt-dlp not available") + " — install yt-dlp or set YTDLP_BIN.";
+          const pill = el("doctorPill");
+          pill.style.display = "inline-flex";
+          el("doctorDot").classList.toggle("ok", Boolean(d.ok));
+          el("doctorDot").classList.toggle("bad", !d.ok);
+          el("doctorTextInline").textContent = d.ok ? (d.message || "yt-dlp ready") : (d.message || "yt-dlp not available");
         } catch {
         }
       })();

@@ -188,6 +188,44 @@ function loadPublicIndexHtml() {
   return null;
 }
 
+function contentTypeForPath(p) {
+  const ext = path.extname(p).toLowerCase();
+  if (ext === ".html") return "text/html; charset=utf-8";
+  if (ext === ".css") return "text/css; charset=utf-8";
+  if (ext === ".js") return "text/javascript; charset=utf-8";
+  if (ext === ".json" || ext === ".webmanifest") return "application/json; charset=utf-8";
+  if (ext === ".svg") return "image/svg+xml";
+  if (ext === ".png") return "image/png";
+  if (ext === ".ico") return "image/x-icon";
+  return "application/octet-stream";
+}
+
+function tryServePublicFile(req, res, pathname) {
+  if (req.method !== "GET" && req.method !== "HEAD") return false;
+  if (pathname === "/" || pathname.startsWith("/api/")) return false;
+  if (pathname.includes("..")) return false;
+
+  const publicDir = path.join(__dirname, "public");
+  const rel = decodeURIComponent(pathname).replace(/^\/+/, "");
+  const fullPath = path.join(publicDir, rel);
+  if (!fullPath.startsWith(publicDir)) return false;
+
+  try {
+    const st = fs.statSync(fullPath);
+    if (!st.isFile()) return false;
+    res.writeHead(200, {
+      "content-type": contentTypeForPath(fullPath),
+      "cache-control": "no-store",
+      "content-length": st.size,
+    });
+    if (req.method === "HEAD") return res.end(), true;
+    fs.createReadStream(fullPath).pipe(res);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function defaultIndexHtml() {
   return `<!doctype html>
 <html lang="en">
@@ -513,6 +551,8 @@ export function createAppServer({
       if (req.method === "GET" && pathname === "/health") {
         return json(res, 200, { ok: true });
       }
+
+      if (tryServePublicFile(req, res, pathname)) return;
 
       if (req.method === "GET" && pathname === "/api/doctor") {
         // quick sanity check whether yt-dlp is runnable from this process
