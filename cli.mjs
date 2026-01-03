@@ -17,7 +17,6 @@ Env:
 }
 
 async function openBrowser(url) {
-  // Best-effort: do nothing if it fails
   try {
     const { spawn } = await import("node:child_process");
     const platform = process.platform;
@@ -29,41 +28,37 @@ async function openBrowser(url) {
       spawn("xdg-open", [url], { stdio: "ignore", detached: true }).unref();
     }
   } catch {
-    // ignore
+    // no-op
   }
 }
 
-// Note: npm's "bin" shims + Git Bash/MSYS can mangle argv paths (e.g. /c/... vs C:\...),
-// so avoid brittle "am I main?" checks. This file is intended to be executed as a CLI.
-{
-  const opts = parseArgs(process.argv);
-  if (opts.help) {
-    printHelp();
+const opts = parseArgs(process.argv);
+if (opts.help) {
+  printHelp();
+  process.exit(0);
+}
+
+const port = Number(opts.port ?? process.env.YTDLP_UI_PORT ?? process.env.PORT ?? 8787);
+const host = String(opts.host ?? process.env.YTDLP_UI_HOST ?? process.env.HOST ?? "127.0.0.1");
+const shouldOpen = opts.open ?? true;
+
+const { server, close } = createAppServer();
+
+server.listen(port, host, async () => {
+  const url = `http://${host}:${port}`;
+  // eslint-disable-next-line no-console
+  console.log(`youtube running on ${url}`);
+  if (shouldOpen) await openBrowser(url);
+});
+
+const shutdown = async () => {
+  try {
+    await close();
+  } finally {
     process.exit(0);
   }
-
-  const port = Number(opts.port ?? process.env.YTDLP_UI_PORT ?? process.env.PORT ?? 8787);
-  const host = String(opts.host ?? process.env.YTDLP_UI_HOST ?? process.env.HOST ?? "127.0.0.1");
-  const shouldOpen = opts.open ?? true;
-
-  const { server, close } = createAppServer();
-
-  server.listen(port, host, async () => {
-    const url = `http://${host}:${port}`;
-    // eslint-disable-next-line no-console
-    console.log(`youtube running on ${url}`);
-    if (shouldOpen) await openBrowser(url);
-  });
-
-  const shutdown = async () => {
-    try {
-      await close();
-    } finally {
-      process.exit(0);
-    }
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-}
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 

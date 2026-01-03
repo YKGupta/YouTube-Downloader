@@ -107,44 +107,20 @@ function ensureDirExists(p) {
 }
 
 function getDefaultDownloadsDir() {
-  // Best-effort: Chrome default is typically the OS "Downloads" folder.
-  // This is local-only tooling; we prefer a sensible default over configurability.
   const home = os.homedir();
   const candidates = [
     process.env.USERPROFILE ? path.join(process.env.USERPROFILE, "Downloads") : null,
     home ? path.join(home, "Downloads") : null,
   ].filter(Boolean);
-  for (const p of candidates) {
-    try {
-      if (ensureDirExists(p)) return p;
-    } catch {
-      // ignore
-    }
-  }
-  // fallback to cwd if we cannot find Downloads
+  for (const p of candidates) if (ensureDirExists(p)) return p;
   return process.cwd();
 }
 
 function safeBasename(name) {
-  // Avoid path traversal; also keep it simple for Windows.
   return path.basename(String(name || "")).replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_");
 }
 
 function classifyNotAllowedMessage(stderrOrOut) {
-  const raw = String(stderrOrOut || "").trim();
-  if (!raw) return "Not allowed to download this video by the creator";
-  // Keep it friendly; many yt-dlp errors include noisy prefixes.
-  const lowered = raw.toLowerCase();
-  if (
-    lowered.includes("copyright") ||
-    lowered.includes("forbidden") ||
-    lowered.includes("not available") ||
-    lowered.includes("private") ||
-    lowered.includes("sign in") ||
-    lowered.includes("this video is unavailable")
-  ) {
-    return "Not allowed to download this video by the creator";
-  }
   return "Not allowed to download this video by the creator";
 }
 
@@ -208,7 +184,6 @@ function loadPublicIndexHtml() {
     const candidate = path.join(__dirname, "public", "index.html");
     if (fs.existsSync(candidate)) return fs.readFileSync(candidate, "utf8");
   } catch {
-    // ignore
   }
   return null;
 }
@@ -829,7 +804,6 @@ export function createAppServer({
 
         if (requestedQuality && Number.isFinite(requestedQuality)) {
           const h = Math.floor(requestedQuality);
-          // Best-effort format selector that caps height.
           args.push("-f", `bestvideo[height<=${h}]+bestaudio/best[height<=${h}]`);
         }
 
