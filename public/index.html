@@ -190,6 +190,18 @@
       .btn:hover { border-color: var(--border2); }
       .btn:active { transform: translateY(0.5px); }
       .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+      .btn.loading { position: relative; pointer-events: none; }
+      .btn.loading::before {
+        content: "";
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        border: 2px solid color-mix(in oklab, currentColor 28%, transparent);
+        border-top-color: currentColor;
+        animation: spin 0.9s linear infinite;
+        margin-right: 6px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
 
       .btn.primary {
         border-color: transparent;
@@ -463,6 +475,17 @@
         mode: "video",
       };
 
+      function setBtnLoading(btnId, isLoading, labelWhenIdle) {
+        const b = el(btnId);
+        if (!b) return;
+        if (labelWhenIdle && !b.dataset.idleLabel) b.dataset.idleLabel = labelWhenIdle;
+        const idle = b.dataset.idleLabel || b.textContent || "";
+        b.classList.toggle("loading", Boolean(isLoading));
+        b.disabled = Boolean(isLoading);
+        b.setAttribute("aria-busy", String(Boolean(isLoading)));
+        if (!isLoading) b.textContent = idle;
+      }
+
       function setProgress({ running, percent = null, text = null } = {}) {
         const dot = el("progressDot");
         const bar = el("progressBar");
@@ -594,32 +617,37 @@
       async function checkVideo() {
         const url = el("urlInput").value.trim();
         if (!url) { alert("Enter a video URL"); return; }
+        setBtnLoading("checkBtn", true, "Check");
         el("videoStatus").textContent = "Checking…";
         el("videoTitle").textContent = "";
         el("downloadVideoBtn").disabled = true;
         el("quality").disabled = true;
         state.currentVideoOk = false;
 
-        const info = await apiGet(`/api/info?url=${encodeURIComponent(url)}`);
-        if (!info.ok) {
-          el("videoStatus").innerHTML = `<span class="badText">${escapeHtml(info.message || "Not allowed to download this video by the creator")}</span>`;
-          return;
-        }
-        state.currentVideoOk = true;
-        el("videoStatus").innerHTML = `<span class="okText">Downloadable</span>`;
-        el("videoTitle").textContent = info.title ? `Title: ${info.title}` : "";
+        try {
+          const info = await apiGet(`/api/info?url=${encodeURIComponent(url)}`);
+          if (!info.ok) {
+            el("videoStatus").innerHTML = `<span class="badText">${escapeHtml(info.message || "Not allowed to download this video by the creator")}</span>`;
+            return;
+          }
+          state.currentVideoOk = true;
+          el("videoStatus").innerHTML = `<span class="okText">Downloadable</span>`;
+          el("videoTitle").textContent = info.title ? `Title: ${info.title}` : "";
 
-        const q = el("quality");
-        q.innerHTML = `<option value="">Best available</option>`;
-        const qualities = Array.isArray(info.qualities) ? info.qualities : [];
-        for (const h of qualities) {
-          const opt = document.createElement("option");
-          opt.value = String(h);
-          opt.textContent = `${h}p`;
-          q.appendChild(opt);
+          const q = el("quality");
+          q.innerHTML = `<option value="">Best available</option>`;
+          const qualities = Array.isArray(info.qualities) ? info.qualities : [];
+          for (const h of qualities) {
+            const opt = document.createElement("option");
+            opt.value = String(h);
+            opt.textContent = `${h}p`;
+            q.appendChild(opt);
+          }
+          q.disabled = false;
+          el("downloadVideoBtn").disabled = false;
+        } finally {
+          setBtnLoading("checkBtn", false, "Check");
         }
-        q.disabled = false;
-        el("downloadVideoBtn").disabled = false;
       }
 
       async function startVideoDownload() {
@@ -628,25 +656,35 @@
         if (!state.currentVideoOk) { alert("Click Check first"); return; }
         const quality = el("quality").value ? Number(el("quality").value) : null;
         const mp3 = el("mp3").checked;
+        setBtnLoading("downloadVideoBtn", true, "Download");
         setStatus("Starting download…");
-        const resp = await apiPost("/api/download", { url, quality, mp3 });
-        const jobId = resp.jobId;
-        localStorage.setItem("ytdlp_jobId", jobId);
-        state.jobId = jobId;
-        log(`[start] jobId=${jobId} items=1`);
-        connectSse(jobId);
+        try {
+          const resp = await apiPost("/api/download", { url, quality, mp3 });
+          const jobId = resp.jobId;
+          localStorage.setItem("ytdlp_jobId", jobId);
+          state.jobId = jobId;
+          log(`[start] jobId=${jobId} items=1`);
+          connectSse(jobId);
+        } finally {
+          setBtnLoading("downloadVideoBtn", false, "Download");
+        }
       }
 
       async function loadPlaylist() {
         setStatus("Loading playlist…");
         const url = el("urlInput").value.trim();
         if (!url) { alert("Enter a playlist URL"); return; }
-        const data = await apiGet(`/api/playlist?url=${encodeURIComponent(url)}`);
-        state.videos = data.videos || [];
-        state.selected = new Set();
-        setStatus(`Loaded ${state.videos.length} videos`);
-        log(`[playlist] loaded ${state.videos.length} items`);
-        renderPlaylist();
+        setBtnLoading("loadPlaylistBtn", true, "Load");
+        try {
+          const data = await apiGet(`/api/playlist?url=${encodeURIComponent(url)}`);
+          state.videos = data.videos || [];
+          state.selected = new Set();
+          setStatus(`Loaded ${state.videos.length} videos`);
+          log(`[playlist] loaded ${state.videos.length} items`);
+          renderPlaylist();
+        } finally {
+          setBtnLoading("loadPlaylistBtn", false, "Load");
+        }
       }
 
       async function startPlaylistDownload() {
@@ -654,13 +692,18 @@
         if (ids.length === 0) { alert("Select at least 1 video"); return; }
         const quality = el("playlistQuality").value ? Number(el("playlistQuality").value) : null;
         const mp3 = el("playlistMp3").checked;
+        setBtnLoading("downloadPlaylistBtn", true, "Download selected");
         setStatus("Starting bulk download…");
-        const resp = await apiPost("/api/download", { ids, quality, mp3 });
-        const jobId = resp.jobId;
-        localStorage.setItem("ytdlp_jobId", jobId);
-        state.jobId = jobId;
-        log(`[start] jobId=${jobId} items=${ids.length}`);
-        connectSse(jobId);
+        try {
+          const resp = await apiPost("/api/download", { ids, quality, mp3 });
+          const jobId = resp.jobId;
+          localStorage.setItem("ytdlp_jobId", jobId);
+          state.jobId = jobId;
+          log(`[start] jobId=${jobId} items=${ids.length}`);
+          connectSse(jobId);
+        } finally {
+          setBtnLoading("downloadPlaylistBtn", false, "Download selected");
+        }
       }
 
       function setMode(mode) {
