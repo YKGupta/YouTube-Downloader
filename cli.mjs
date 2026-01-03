@@ -28,7 +28,6 @@ async function openBrowser(url) {
       spawn("xdg-open", [url], { stdio: "ignore", detached: true }).unref();
     }
   } catch {
-    // no-op
   }
 }
 

@@ -10,14 +10,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function resolveYtDlpBinary(requestedCommand) {
-  // If user explicitly sets YTDLP_BIN, trust it.
   if (process.env.YTDLP_BIN) return process.env.YTDLP_BIN;
 
-  // If already a path, keep it.
   if (requestedCommand.includes("/") || requestedCommand.includes("\\"))
     return requestedCommand;
 
-  // Best-effort Windows resolution: Winget installs often aren't visible to Git Bash / npm PATH
   if (process.platform === "win32" && (requestedCommand === "yt-dlp" || requestedCommand === "yt-dlp.exe")) {
     try {
       const out = execFileSync("where.exe", ["yt-dlp"], {
@@ -30,10 +27,8 @@ function resolveYtDlpBinary(requestedCommand) {
         .find(Boolean);
       if (first) return first;
     } catch {
-      // ignore
     }
 
-    // Fallback: scan the default Winget packages directory directly
     try {
       const localAppData =
         process.env.LOCALAPPDATA ||
@@ -51,7 +46,6 @@ function resolveYtDlpBinary(requestedCommand) {
         }
       }
     } catch {
-      // ignore
     }
   }
 
@@ -555,7 +549,6 @@ export function createAppServer({
       if (tryServePublicFile(req, res, pathname)) return;
 
       if (req.method === "GET" && pathname === "/api/doctor") {
-        // quick sanity check whether yt-dlp is runnable from this process
         try {
           const child = spawnYtDlp(["--version"], { cwd: process.cwd() });
           let out = "";
