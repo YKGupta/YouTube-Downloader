@@ -502,7 +502,11 @@
       function log(line) {
         const box = el("log");
         if (box) {
-          box.textContent += line + "\\n";
+          const normalized = String(line)
+            .replace(/\\r\\n/g, "\n")
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "\n");
+          box.textContent += normalized + "\n";
           box.scrollTop = box.scrollHeight;
         }
         const m = String(line).match(/(\d+(?:\.\d+)?)%/);
