@@ -15,16 +15,23 @@ async function listen(app, port = 0) {
   });
 }
 
-function makeFakeSpawner({ infoJson = null, listLines = [], downloadLines = [], exitCode = 0 } = {}) {
-  return (args) => {
+function makeFakeSpawner({
+  infoJson = null,
+  listLines = [],
+  downloadLines = [],
+  exitCode = 0,
+} = {}) {
+  return (args, _opts) => {
     // Minimal ChildProcessWithoutNullStreams mock
+    /** @type {any} */
     const child = new EventEmitter();
     child.stdout = new PassThrough();
     child.stderr = new PassThrough();
     child.stdin = new PassThrough();
 
     const isInfo = args.includes("-J");
-    const isList = args.includes("--flat-playlist") && args.includes("--dump-json");
+    const isList =
+      args.includes("--flat-playlist") && args.includes("--dump-json");
     const isDownload = args.includes("-a") && args.includes("--newline");
 
     queueMicrotask(() => {
@@ -45,22 +52,26 @@ function makeFakeSpawner({ infoJson = null, listLines = [], downloadLines = [], 
 function makeRecordingSpawner() {
   /** @type {string[][]} */
   const calls = [];
-  const spawner = (args) => {
+  const spawner = (args, _opts) => {
     calls.push(args);
-    return makeFakeSpawner() (args);
+    return makeFakeSpawner()(args, _opts);
   };
   return { spawner, calls };
 }
 
-function makeErrorSpawner({ code = "ENOENT", message = "spawn yt-dlp ENOENT" } = {}) {
-  return () => {
+function makeErrorSpawner({
+  code = "ENOENT",
+  message = "spawn yt-dlp ENOENT",
+} = {}) {
+  return (_args, _opts) => {
+    /** @type {any} */
     const child = new EventEmitter();
     child.stdout = new PassThrough();
     child.stderr = new PassThrough();
     child.stdin = new PassThrough();
 
     queueMicrotask(() => {
-      const err = new Error(message);
+      const err = /** @type {any} */ (new Error(message));
       err.code = code;
       child.emit("error", err);
     });
@@ -94,10 +105,15 @@ describe("ytdlp-ui server", () => {
         formats: [{ height: 720 }, { height: 360 }, { height: null }],
       },
     });
-    const app = createAppServer({ spawnYtDlp: fakeSpawn, downloadsBaseDir: tmp });
+    const app = createAppServer({
+      spawnYtDlp: fakeSpawn,
+      downloadsBaseDir: tmp,
+    });
     const s = await listen(app);
 
-    const res = await fetch(`http://localhost:${s.port}/api/info?url=${encodeURIComponent("https://example.com")}`);
+    const res = await fetch(
+      `http://localhost:${s.port}/api/info?url=${encodeURIComponent("https://example.com")}`,
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
@@ -120,12 +136,22 @@ describe("ytdlp-ui server", () => {
     const app = createAppServer({ spawnYtDlp: fakeSpawn });
     const s = await listen(app);
 
-    const res = await fetch(`http://localhost:${s.port}/api/list?url=${encodeURIComponent("https://example.com")}`);
+    const res = await fetch(
+      `http://localhost:${s.port}/api/list?url=${encodeURIComponent("https://example.com")}`,
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.videos).toEqual([
-      { id: "f4g1xtyY3uo", title: "Short 1", url: "https://www.youtube.com/watch?v=f4g1xtyY3uo" },
-      { id: "gAnS4WTgeIE", title: "Short 2", url: "https://www.youtube.com/watch?v=gAnS4WTgeIE" },
+      {
+        id: "f4g1xtyY3uo",
+        title: "Short 1",
+        url: "https://www.youtube.com/watch?v=f4g1xtyY3uo",
+      },
+      {
+        id: "gAnS4WTgeIE",
+        title: "Short 2",
+        url: "https://www.youtube.com/watch?v=gAnS4WTgeIE",
+      },
     ]);
 
     await s.close();
@@ -136,7 +162,9 @@ describe("ytdlp-ui server", () => {
     const app = createAppServer({ spawnYtDlp: makeErrorSpawner() });
     const s = await listen(app);
 
-    const res = await fetch(`http://localhost:${s.port}/api/list?url=${encodeURIComponent("https://example.com")}`);
+    const res = await fetch(
+      `http://localhost:${s.port}/api/list?url=${encodeURIComponent("https://example.com")}`,
+    );
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.error).toMatch(/set ytdlp_bin/i);
@@ -147,7 +175,10 @@ describe("ytdlp-ui server", () => {
   it("POST /api/download requires either url or ids", async () => {
     const { createAppServer } = await import("../server.mjs");
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ytdlp-ui-test-"));
-    const app = createAppServer({ spawnYtDlp: makeFakeSpawner(), downloadsBaseDir: tmp });
+    const app = createAppServer({
+      spawnYtDlp: makeFakeSpawner(),
+      downloadsBaseDir: tmp,
+    });
     const s = await listen(app);
 
     const res = await fetch(`http://localhost:${s.port}/api/download`, {
@@ -165,19 +196,28 @@ describe("ytdlp-ui server", () => {
   it("POST /api/download starts a job for a single url and exposes /api/files/:jobId", async () => {
     const { createAppServer } = await import("../server.mjs");
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ytdlp-ui-test-"));
-    const app = createAppServer({ spawnYtDlp: makeFakeSpawner(), downloadsBaseDir: tmp });
+    const app = createAppServer({
+      spawnYtDlp: makeFakeSpawner(),
+      downloadsBaseDir: tmp,
+    });
     const s = await listen(app);
 
     const res = await fetch(`http://localhost:${s.port}/api/download`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url: "https://example.com/watch?v=f4g1xtyY3uo", quality: 720, mp3: false }),
+      body: JSON.stringify({
+        url: "https://example.com/watch?v=f4g1xtyY3uo",
+        quality: 720,
+        mp3: false,
+      }),
     });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.jobId).toMatch(/^[a-z0-9]+$/);
 
-    const filesRes = await fetch(`http://localhost:${s.port}/api/files/${body.jobId}`);
+    const filesRes = await fetch(
+      `http://localhost:${s.port}/api/files/${body.jobId}`,
+    );
     expect(filesRes.status).toBe(200);
     const filesBody = await filesRes.json();
     expect(Array.isArray(filesBody.files)).toBe(true);
@@ -190,13 +230,21 @@ describe("ytdlp-ui server", () => {
     const { createAppServer } = await import("../server.mjs");
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ytdlp-ui-test-"));
     const rec = makeRecordingSpawner();
-    const app = createAppServer({ spawnYtDlp: rec.spawner, downloadsBaseDir: tmp });
+    const app = createAppServer({
+      spawnYtDlp: rec.spawner,
+      downloadsBaseDir: tmp,
+    });
     const s = await listen(app);
 
     const res = await fetch(`http://localhost:${s.port}/api/download`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url: "https://example.com/watch?v=f4g1xtyY3uo", quality: 720, mp3: false, videoOnly: true }),
+      body: JSON.stringify({
+        url: "https://example.com/watch?v=f4g1xtyY3uo",
+        quality: 720,
+        mp3: false,
+        videoOnly: true,
+      }),
     });
     expect(res.status).toBe(200);
 
@@ -211,5 +259,3 @@ describe("ytdlp-ui server", () => {
     await s.close();
   });
 });
-
-

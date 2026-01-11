@@ -11,11 +11,10 @@ export function parseArgs(argv) {
     else if (a === "--host") out.host = args[++i];
     else if (a.startsWith("--host=")) out.host = a.slice("--host=".length);
     else if (a === "--port") out.port = Number(args[++i]);
-    else if (a.startsWith("--port=")) out.port = Number(a.slice("--port=".length));
+    else if (a.startsWith("--port="))
+      out.port = Number(a.slice("--port=".length));
   }
 
   if (Number.isNaN(out.port)) out.port = undefined;
   return out;
 }
-
-
