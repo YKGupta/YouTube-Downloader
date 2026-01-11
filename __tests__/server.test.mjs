@@ -42,6 +42,16 @@ function makeFakeSpawner({ infoJson = null, listLines = [], downloadLines = [], 
   };
 }
 
+function makeRecordingSpawner() {
+  /** @type {string[][]} */
+  const calls = [];
+  const spawner = (args) => {
+    calls.push(args);
+    return makeFakeSpawner() (args);
+  };
+  return { spawner, calls };
+}
+
 function makeErrorSpawner({ code = "ENOENT", message = "spawn yt-dlp ENOENT" } = {}) {
   return () => {
     const child = new EventEmitter();
@@ -172,6 +182,31 @@ describe("ytdlp-ui server", () => {
     const filesBody = await filesRes.json();
     expect(Array.isArray(filesBody.files)).toBe(true);
     expect(Array.isArray(filesBody.downloadUrls)).toBe(true);
+
+    await s.close();
+  });
+
+  it("POST /api/download with videoOnly uses bestvideo and remuxes to mp4", async () => {
+    const { createAppServer } = await import("../server.mjs");
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ytdlp-ui-test-"));
+    const rec = makeRecordingSpawner();
+    const app = createAppServer({ spawnYtDlp: rec.spawner, downloadsBaseDir: tmp });
+    const s = await listen(app);
+
+    const res = await fetch(`http://localhost:${s.port}/api/download`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: "https://example.com/watch?v=f4g1xtyY3uo", quality: 720, mp3: false, videoOnly: true }),
+    });
+    expect(res.status).toBe(200);
+
+    const downloadCall = rec.calls.find((a) => a.includes("--newline"));
+    expect(downloadCall).toBeTruthy();
+    expect(downloadCall).toContain("--remux-video");
+    expect(downloadCall).toContain("mp4");
+    expect(downloadCall).toContain("-f");
+    expect(downloadCall.join(" ")).toMatch(/bestvideo\[height<=720\]/);
+    expect(downloadCall.join(" ")).not.toMatch(/\+bestaudio/);
 
     await s.close();
   });

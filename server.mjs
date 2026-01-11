@@ -787,6 +787,7 @@ export function createAppServer({
         const url = String(body.url || "").trim();
         const requestedQuality = body.quality === null || body.quality === undefined ? null : Number(body.quality);
         const mp3 = Boolean(body.mp3);
+        const videoOnly = Boolean(body.videoOnly) && !mp3;
         const cookiesFromBrowser = body.cookiesFromBrowser ? String(body.cookiesFromBrowser) : null;
 
         const validIds = ids.filter(isValidYtId);
@@ -831,13 +832,18 @@ export function createAppServer({
 
         if (mp3) {
           args.push("--extract-audio", "--audio-format", "mp3");
+        } else if (videoOnly) {
+          args.push("--remux-video", "mp4");
         } else {
           args.push("--merge-output-format", "mp4");
         }
 
         if (requestedQuality && Number.isFinite(requestedQuality)) {
           const h = Math.floor(requestedQuality);
-          args.push("-f", `bestvideo[height<=${h}]+bestaudio/best[height<=${h}]`);
+          if (videoOnly) args.push("-f", `bestvideo[height<=${h}]/bestvideo`);
+          else args.push("-f", `bestvideo[height<=${h}]+bestaudio/best[height<=${h}]`);
+        } else if (videoOnly) {
+          args.push("-f", "bestvideo/bestvideo");
         }
 
         let tmpListPath = null;

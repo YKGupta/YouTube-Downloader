@@ -147,17 +147,19 @@
       h1 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -0.03em; }
       .sub { color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 72ch; }
 
-      .grid { display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 18px; }
-      @media (min-width: 980px) { .grid { grid-template-columns: 1fr; } }
+      /* Use minmax(0, 1fr) so long unbroken content (e.g. paths) can't force the track wider */
+      .grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); margin-top: 18px; }
+      @media (min-width: 980px) { .grid { grid-template-columns: minmax(0, 1fr); } }
 
       .card {
         border: 1px solid var(--border);
         border-radius: var(--radius);
         background: color-mix(in oklab, var(--panel) 92%, transparent);
         box-shadow: var(--shadow);
+        min-width: 0;
       }
       .card-header { padding: 14px 14px 0 14px; }
-      .card-body { padding: 14px; }
+      .card-body { padding: 14px; min-width: 0; }
       .card-title { font-weight: 650; font-size: 13px; color: var(--muted); margin: 0; }
 
       .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
@@ -261,10 +263,12 @@
         border: 1px solid var(--border);
         background: #0b0b0d;
         overflow: hidden;
+        max-width: 100%;
       }
       .log {
         max-height: 180px;
         overflow: auto;
+        max-width: 100%;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         font-size: 12px;
         white-space: pre;
@@ -278,7 +282,7 @@
       .log::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 999px; }
       .log::-webkit-scrollbar-thumb { background: rgba(229,231,235,0.22); border-radius: 999px; border: 2px solid rgba(255,255,255,0.06); }
       .log::-webkit-scrollbar-thumb:hover { background: rgba(229,231,235,0.32); }
-      .log-line { display: flex; gap: 10px; align-items: flex-start; padding: 2px 0; }
+      .log-line { display: flex; gap: 10px; align-items: flex-start; padding: 2px 0; min-width: 0; }
       .log-line:hover { background: rgba(255,255,255,0.03); }
       .log-tag {
         flex: 0 0 auto;
@@ -291,7 +295,7 @@
         border-radius: 999px;
         padding: 2px 8px;
       }
-      .log-msg { flex: 1 1 auto; color: rgba(229,231,235,0.88); white-space: pre; }
+      .log-msg { flex: 1 1 auto; min-width: 0; color: rgba(229,231,235,0.88); white-space: pre; }
       .log-tag.download { color: #34d399; border-color: rgba(52,211,153,0.28); background: rgba(52,211,153,0.08); }
       .log-tag.merger, .log-tag.extractaudio { color: #60a5fa; border-color: rgba(96,165,250,0.28); background: rgba(96,165,250,0.08); }
       .log-tag.warning { color: #fbbf24; border-color: rgba(251,191,36,0.28); background: rgba(251,191,36,0.08); }
@@ -425,6 +429,9 @@
                 <div>
                   <label><input id="mp3" type="checkbox" /> MP3 only</label>
                 </div>
+                <div id="videoOnlyWrap">
+                  <label><input id="videoOnly" type="checkbox" /> Video only (no audio)</label>
+                </div>
                 <div style="margin-left:auto;">
                   <button id="downloadVideoBtn" class="btn primary" disabled type="button">Download</button>
                 </div>
@@ -480,6 +487,9 @@
               </div>
               <div>
                 <label><input id="playlistMp3" type="checkbox" /> MP3 only</label>
+              </div>
+              <div id="playlistVideoOnlyWrap">
+                <label><input id="playlistVideoOnly" type="checkbox" /> Video only (no audio)</label>
               </div>
               <div style="margin-left:auto;">
                 <button id="downloadPlaylistBtn" class="btn primary" disabled type="button">Download selected</button>
@@ -795,10 +805,11 @@
         if (!state.currentVideoOk) { alert("Click Check first"); return; }
         const quality = el("quality").value ? Number(el("quality").value) : null;
         const mp3 = el("mp3").checked;
+        const videoOnly = !mp3 && Boolean(el("videoOnly")?.checked);
         setBtnLoading("downloadVideoBtn", true, "Download");
         setStatus("Starting download…");
         try {
-          const resp = await apiPost("/api/download", { url, quality, mp3 });
+          const resp = await apiPost("/api/download", { url, quality, mp3, videoOnly });
           const jobId = resp.jobId;
           localStorage.setItem("ytdlp_jobId", jobId);
           state.jobId = jobId;
@@ -831,10 +842,11 @@
         if (ids.length === 0) { alert("Select at least 1 video"); return; }
         const quality = el("playlistQuality").value ? Number(el("playlistQuality").value) : null;
         const mp3 = el("playlistMp3").checked;
+        const videoOnly = !mp3 && Boolean(el("playlistVideoOnly")?.checked);
         setBtnLoading("downloadPlaylistBtn", true, "Download selected");
         setStatus("Starting bulk download…");
         try {
-          const resp = await apiPost("/api/download", { ids, quality, mp3 });
+          const resp = await apiPost("/api/download", { ids, quality, mp3, videoOnly });
           const jobId = resp.jobId;
           localStorage.setItem("ytdlp_jobId", jobId);
           state.jobId = jobId;
@@ -858,7 +870,10 @@
         state.currentVideoOk = false;
         el("downloadVideoBtn").disabled = true;
         el("quality").disabled = true;
+        if (el("videoOnly")) el("videoOnly").checked = false;
         el("videoStatus").innerHTML = isVideo ? 'Enter a URL and click <strong>Check</strong>.' : el("videoStatus").innerHTML;
+        el("videoOnlyWrap").style.display = el("mp3").checked ? "none" : "";
+        el("playlistVideoOnlyWrap").style.display = el("playlistMp3").checked ? "none" : "";
       }
 
       el("tabVideo").addEventListener("click", () => setMode("video"));
@@ -868,6 +883,15 @@
         e.preventDefault();
         if ((state.mode || "video") === "video") el("checkBtn").click();
         else el("loadPlaylistBtn").click();
+      });
+
+      el("mp3")?.addEventListener("change", () => {
+        el("videoOnlyWrap").style.display = el("mp3").checked ? "none" : "";
+        if (el("mp3").checked && el("videoOnly")) el("videoOnly").checked = false;
+      });
+      el("playlistMp3")?.addEventListener("change", () => {
+        el("playlistVideoOnlyWrap").style.display = el("playlistMp3").checked ? "none" : "";
+        if (el("playlistMp3").checked && el("playlistVideoOnly")) el("playlistVideoOnly").checked = false;
       });
 
       el("checkBtn").addEventListener("click", () => checkVideo().catch((e) => { setStatus("Error"); alert(e.message); }));
