@@ -6,9 +6,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-async function listen(app, port = 0) {
+async function listen(app, port = 0, host = "127.0.0.1") {
   return await new Promise((resolve) => {
-    app.server.listen(port, () => {
+    app.server.listen(port, host, () => {
       const addr = app.server.address();
       resolve({ port: addr.port, close: () => app.close() });
     });
@@ -86,7 +86,7 @@ describe("ytdlp-ui server", () => {
     const app = createAppServer({ spawnYtDlp: makeErrorSpawner() });
     const s = await listen(app);
 
-    const res = await fetch(`http://localhost:${s.port}/api/doctor`);
+    const res = await fetch(`http://127.0.0.1:${s.port}/api/doctor`);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(false);
@@ -112,7 +112,7 @@ describe("ytdlp-ui server", () => {
     const s = await listen(app);
 
     const res = await fetch(
-      `http://localhost:${s.port}/api/info?url=${encodeURIComponent("https://example.com")}`,
+      `http://127.0.0.1:${s.port}/api/info?url=${encodeURIComponent("https://example.com")}`,
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -137,7 +137,7 @@ describe("ytdlp-ui server", () => {
     const s = await listen(app);
 
     const res = await fetch(
-      `http://localhost:${s.port}/api/list?url=${encodeURIComponent("https://example.com")}`,
+      `http://127.0.0.1:${s.port}/api/list?url=${encodeURIComponent("https://example.com")}`,
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -163,7 +163,7 @@ describe("ytdlp-ui server", () => {
     const s = await listen(app);
 
     const res = await fetch(
-      `http://localhost:${s.port}/api/list?url=${encodeURIComponent("https://example.com")}`,
+      `http://127.0.0.1:${s.port}/api/list?url=${encodeURIComponent("https://example.com")}`,
     );
     expect(res.status).toBe(500);
     const body = await res.json();
@@ -181,7 +181,7 @@ describe("ytdlp-ui server", () => {
     });
     const s = await listen(app);
 
-    const res = await fetch(`http://localhost:${s.port}/api/download`, {
+    const res = await fetch(`http://127.0.0.1:${s.port}/api/download`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({}),
@@ -202,7 +202,7 @@ describe("ytdlp-ui server", () => {
     });
     const s = await listen(app);
 
-    const res = await fetch(`http://localhost:${s.port}/api/download`, {
+    const res = await fetch(`http://127.0.0.1:${s.port}/api/download`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -216,7 +216,7 @@ describe("ytdlp-ui server", () => {
     expect(body.jobId).toMatch(/^[a-z0-9]+$/);
 
     const filesRes = await fetch(
-      `http://localhost:${s.port}/api/files/${body.jobId}`,
+      `http://127.0.0.1:${s.port}/api/files/${body.jobId}`,
     );
     expect(filesRes.status).toBe(200);
     const filesBody = await filesRes.json();
@@ -236,7 +236,7 @@ describe("ytdlp-ui server", () => {
     });
     const s = await listen(app);
 
-    const res = await fetch(`http://localhost:${s.port}/api/download`, {
+    const res = await fetch(`http://127.0.0.1:${s.port}/api/download`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

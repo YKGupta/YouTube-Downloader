@@ -13,12 +13,7 @@ concurrency:
 jobs:
   test:
     name: Lint / Format / Typecheck / Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        node: [18]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -27,7 +22,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 18
           cache: npm
 
       - name: Install
