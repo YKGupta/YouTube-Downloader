@@ -21,14 +21,16 @@ async function openBrowser(url) {
     const { spawn } = await import("node:child_process");
     const platform = process.platform;
     if (platform === "win32") {
-      spawn("cmd", ["/c", "start", "", url], { stdio: "ignore", detached: true }).unref();
+      spawn("cmd", ["/c", "start", "", url], {
+        stdio: "ignore",
+        detached: true,
+      }).unref();
     } else if (platform === "darwin") {
       spawn("open", [url], { stdio: "ignore", detached: true }).unref();
     } else {
       spawn("xdg-open", [url], { stdio: "ignore", detached: true }).unref();
     }
-  } catch {
-  }
+  } catch {}
 }
 
 const opts = parseArgs(process.argv);
@@ -37,8 +39,12 @@ if (opts.help) {
   process.exit(0);
 }
 
-const port = Number(opts.port ?? process.env.YTDLP_UI_PORT ?? process.env.PORT ?? 8787);
-const host = String(opts.host ?? process.env.YTDLP_UI_HOST ?? process.env.HOST ?? "127.0.0.1");
+const port = Number(
+  opts.port ?? process.env.YTDLP_UI_PORT ?? process.env.PORT ?? 8787,
+);
+const host = String(
+  opts.host ?? process.env.YTDLP_UI_HOST ?? process.env.HOST ?? "127.0.0.1",
+);
 const shouldOpen = opts.open ?? true;
 
 const { server, close } = createAppServer();
@@ -59,5 +65,3 @@ const shutdown = async () => {
 };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-

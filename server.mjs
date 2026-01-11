@@ -15,7 +15,10 @@ function resolveYtDlpBinary(requestedCommand) {
   if (requestedCommand.includes("/") || requestedCommand.includes("\\"))
     return requestedCommand;
 
-  if (process.platform === "win32" && (requestedCommand === "yt-dlp" || requestedCommand === "yt-dlp.exe")) {
+  if (
+    process.platform === "win32" &&
+    (requestedCommand === "yt-dlp" || requestedCommand === "yt-dlp.exe")
+  ) {
     try {
       const out = execFileSync("where.exe", ["yt-dlp"], {
         encoding: "utf8",
@@ -26,15 +29,21 @@ function resolveYtDlpBinary(requestedCommand) {
         .map((l) => l.trim())
         .find(Boolean);
       if (first) return first;
-    } catch {
-    }
+    } catch {}
 
     try {
       const localAppData =
         process.env.LOCALAPPDATA ||
-        (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, "AppData", "Local") : null);
+        (process.env.USERPROFILE
+          ? path.join(process.env.USERPROFILE, "AppData", "Local")
+          : null);
       if (localAppData) {
-        const packagesDir = path.join(localAppData, "Microsoft", "WinGet", "Packages");
+        const packagesDir = path.join(
+          localAppData,
+          "Microsoft",
+          "WinGet",
+          "Packages",
+        );
         if (fs.existsSync(packagesDir)) {
           const entries = fs.readdirSync(packagesDir, { withFileTypes: true });
           for (const ent of entries) {
@@ -45,8 +54,7 @@ function resolveYtDlpBinary(requestedCommand) {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return requestedCommand;
@@ -62,7 +70,12 @@ function json(res, statusCode, data) {
   res.end(body);
 }
 
-function text(res, statusCode, body, contentType = "text/plain; charset=utf-8") {
+function text(
+  res,
+  statusCode,
+  body,
+  contentType = "text/plain; charset=utf-8",
+) {
   res.writeHead(statusCode, {
     "content-type": contentType,
     "cache-control": "no-store",
@@ -103,7 +116,9 @@ function ensureDirExists(p) {
 function getDefaultDownloadsDir() {
   const home = os.homedir();
   const candidates = [
-    process.env.USERPROFILE ? path.join(process.env.USERPROFILE, "Downloads") : null,
+    process.env.USERPROFILE
+      ? path.join(process.env.USERPROFILE, "Downloads")
+      : null,
     home ? path.join(home, "Downloads") : null,
   ].filter(Boolean);
   for (const p of candidates) if (ensureDirExists(p)) return p;
@@ -111,10 +126,12 @@ function getDefaultDownloadsDir() {
 }
 
 function safeBasename(name) {
-  return path.basename(String(name || "")).replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_");
+  return path
+    .basename(String(name || ""))
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_");
 }
 
-function classifyNotAllowedMessage(stderrOrOut) {
+function classifyNotAllowedMessage(_stderrOrOut) {
   return "Not allowed to download this video by the creator";
 }
 
@@ -177,8 +194,7 @@ function loadPublicIndexHtml() {
   try {
     const candidate = path.join(__dirname, "public", "index.html");
     if (fs.existsSync(candidate)) return fs.readFileSync(candidate, "utf8");
-  } catch {
-  }
+  } catch {}
   return null;
 }
 
@@ -187,7 +203,8 @@ function contentTypeForPath(p) {
   if (ext === ".html") return "text/html; charset=utf-8";
   if (ext === ".css") return "text/css; charset=utf-8";
   if (ext === ".js") return "text/javascript; charset=utf-8";
-  if (ext === ".json" || ext === ".webmanifest") return "application/json; charset=utf-8";
+  if (ext === ".json" || ext === ".webmanifest")
+    return "application/json; charset=utf-8";
   if (ext === ".svg") return "image/svg+xml";
   if (ext === ".png") return "image/png";
   if (ext === ".ico") return "image/x-icon";
@@ -212,7 +229,7 @@ function tryServePublicFile(req, res, pathname) {
       "cache-control": "no-store",
       "content-length": st.size,
     });
-    if (req.method === "HEAD") return res.end(), true;
+    if (req.method === "HEAD") return (res.end(), true);
     fs.createReadStream(fullPath).pipe(res);
     return true;
   } catch {
@@ -509,7 +526,7 @@ export function createAppServer({
   indexHtml = loadPublicIndexHtml() || defaultIndexHtml(),
   downloadsBaseDir = null,
 } = {}) {
-  /** @type {Map<string, { id: string, createdAt: number, lines: string[], sseClients: Set<import("node:http").ServerResponse>, done?: { exitCode: number | null } }>} */
+  /** @type {Map<string, { id: string, createdAt: number, lines: string[], sseClients: Set<import("node:http").ServerResponse>, downloadsDir: string | null, done?: { exitCode: number | null } }>} */
   const jobs = new Map();
 
   function jobAppend(jobId, line) {
@@ -535,7 +552,10 @@ export function createAppServer({
 
   const server = http.createServer(async (req, res) => {
     try {
-      const urlObj = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+      const urlObj = new URL(
+        req.url || "/",
+        `http://${req.headers.host || "localhost"}`,
+      );
       const { pathname } = urlObj;
 
       if (req.method === "GET" && pathname === "/") {
@@ -563,10 +583,12 @@ export function createAppServer({
           });
 
           if (result.error) {
+            const errAny = /** @type {any} */ (result.error);
             return json(res, 200, {
               ok: false,
               ytDlpCommand,
-              message: `Cannot spawn yt-dlp: ${result.error?.code || ""} ${result.error?.message || ""}`.trim(),
+              message:
+                `Cannot spawn yt-dlp: ${errAny?.code || ""} ${errAny?.message || ""}`.trim(),
             });
           }
 
@@ -574,7 +596,8 @@ export function createAppServer({
             return json(res, 200, {
               ok: false,
               ytDlpCommand,
-              message: `yt-dlp exited ${result.code}. ${String(err || out).trim()}`.trim(),
+              message:
+                `yt-dlp exited ${result.code}. ${String(err || out).trim()}`.trim(),
             });
           }
 
@@ -587,7 +610,8 @@ export function createAppServer({
           return json(res, 200, {
             ok: false,
             ytDlpCommand,
-            message: `Failed to start yt-dlp: ${e?.message || "unknown error"}`.trim(),
+            message:
+              `Failed to start yt-dlp: ${e?.message || "unknown error"}`.trim(),
           });
         }
       }
@@ -599,7 +623,9 @@ export function createAppServer({
 
         let child;
         try {
-          child = spawnYtDlp(["-J", "--no-warnings", "--yes-playlist", url], { cwd: process.cwd() });
+          child = spawnYtDlp(["-J", "--no-warnings", "--yes-playlist", url], {
+            cwd: process.cwd(),
+          });
         } catch (e) {
           return internalError(
             res,
@@ -620,10 +646,12 @@ export function createAppServer({
         });
 
         if (exitCode && typeof exitCode === "object" && exitCode.__error) {
-          const err = exitCode.__error;
+          const err = /** @type {any} */ (exitCode.__error);
           return json(res, 200, {
             ok: false,
-            message: classifyNotAllowedMessage(`${err?.code || ""} ${err?.message || ""}`.trim()),
+            message: classifyNotAllowedMessage(
+              `${err?.code || ""} ${err?.message || ""}`.trim(),
+            ),
           });
         }
 
@@ -636,7 +664,10 @@ export function createAppServer({
 
         const parsed = safeParseJson(stdout.trim());
         if (!parsed.ok) {
-          return json(res, 200, { ok: false, message: "Could not read video info" });
+          return json(res, 200, {
+            ok: false,
+            message: "Could not read video info",
+          });
         }
         const info = parsed.value;
         const title = String(info?.title || "");
@@ -662,9 +693,12 @@ export function createAppServer({
 
         let child;
         try {
-          child = spawnYtDlp(["--flat-playlist", "--dump-json", "--yes-playlist", url], {
-            cwd: process.cwd(),
-          });
+          child = spawnYtDlp(
+            ["--flat-playlist", "--dump-json", "--yes-playlist", url],
+            {
+              cwd: process.cwd(),
+            },
+          );
         } catch (e) {
           return internalError(
             res,
@@ -693,7 +727,11 @@ export function createAppServer({
             const id = obj?.id;
             const title = obj?.title;
             if (!isValidYtId(id)) continue;
-            videos.push({ id, title: String(title || ""), url: buildVideoUrlFromId(id) });
+            videos.push({
+              id,
+              title: String(title || ""),
+              url: buildVideoUrlFromId(id),
+            });
           }
         });
 
@@ -702,14 +740,17 @@ export function createAppServer({
           child.on("error", (err) => resolve({ __error: err }));
         });
         if (exitCode && typeof exitCode === "object" && exitCode.__error) {
-          const err = exitCode.__error;
+          const err = /** @type {any} */ (exitCode.__error);
           return internalError(
             res,
             `Failed to run yt-dlp (${ytDlpCommand}): ${err?.code || ""} ${err?.message || ""}. Set YTDLP_BIN to the full path to yt-dlp.exe.`.trim(),
           );
         }
         if (exitCode !== 0) {
-          return internalError(res, `yt-dlp failed (exit ${exitCode}). ${stderr.trim()}`.trim());
+          return internalError(
+            res,
+            `yt-dlp failed (exit ${exitCode}). ${stderr.trim()}`.trim(),
+          );
         }
         return json(res, 200, { videos });
       }
@@ -725,9 +766,12 @@ export function createAppServer({
 
         let child;
         try {
-          child = spawnYtDlp(["--flat-playlist", "--dump-json", "--yes-playlist", url], {
-            cwd: process.cwd(),
-          });
+          child = spawnYtDlp(
+            ["--flat-playlist", "--dump-json", "--yes-playlist", url],
+            {
+              cwd: process.cwd(),
+            },
+          );
         } catch (e) {
           return internalError(
             res,
@@ -756,7 +800,11 @@ export function createAppServer({
             const id = obj?.id;
             const title = obj?.title;
             if (!isValidYtId(id)) continue;
-            videos.push({ id, title: String(title || ""), url: buildVideoUrlFromId(id) });
+            videos.push({
+              id,
+              title: String(title || ""),
+              url: buildVideoUrlFromId(id),
+            });
           }
         });
 
@@ -765,14 +813,17 @@ export function createAppServer({
           child.on("error", (err) => resolve({ __error: err }));
         });
         if (exitCode && typeof exitCode === "object" && exitCode.__error) {
-          const err = exitCode.__error;
+          const err = /** @type {any} */ (exitCode.__error);
           return internalError(
             res,
             `Failed to run yt-dlp (${ytDlpCommand}): ${err?.code || ""} ${err?.message || ""}. Set YTDLP_BIN to the full path to yt-dlp.exe.`.trim(),
           );
         }
         if (exitCode !== 0) {
-          return internalError(res, `yt-dlp failed (exit ${exitCode}). ${stderr.trim()}`.trim());
+          return internalError(
+            res,
+            `yt-dlp failed (exit ${exitCode}). ${stderr.trim()}`.trim(),
+          );
         }
         return json(res, 200, { videos });
       }
@@ -785,9 +836,15 @@ export function createAppServer({
         const body = parsed.value || {};
         const ids = Array.isArray(body.ids) ? body.ids : [];
         const url = String(body.url || "").trim();
-        const requestedQuality = body.quality === null || body.quality === undefined ? null : Number(body.quality);
+        const requestedQuality =
+          body.quality === null || body.quality === undefined
+            ? null
+            : Number(body.quality);
         const mp3 = Boolean(body.mp3);
-        const cookiesFromBrowser = body.cookiesFromBrowser ? String(body.cookiesFromBrowser) : null;
+        const videoOnly = Boolean(body.videoOnly) && !mp3;
+        const cookiesFromBrowser = body.cookiesFromBrowser
+          ? String(body.cookiesFromBrowser)
+          : null;
 
         const validIds = ids.filter(isValidYtId);
         const isBulk = validIds.length > 0;
@@ -812,7 +869,11 @@ export function createAppServer({
         }
         job.downloadsDir = jobDir;
 
-        const archivePath = path.join(baseDownloadsDir, "ytdlp-ui", ".ytdlp-archive.txt");
+        const archivePath = path.join(
+          baseDownloadsDir,
+          "ytdlp-ui",
+          ".ytdlp-archive.txt",
+        );
         const outputTemplate = "%(upload_date)s - %(title)s [%(id)s].%(ext)s";
 
         /** @type {string[]} */
@@ -831,13 +892,22 @@ export function createAppServer({
 
         if (mp3) {
           args.push("--extract-audio", "--audio-format", "mp3");
+        } else if (videoOnly) {
+          args.push("--remux-video", "mp4");
         } else {
           args.push("--merge-output-format", "mp4");
         }
 
         if (requestedQuality && Number.isFinite(requestedQuality)) {
           const h = Math.floor(requestedQuality);
-          args.push("-f", `bestvideo[height<=${h}]+bestaudio/best[height<=${h}]`);
+          if (videoOnly) args.push("-f", `bestvideo[height<=${h}]/bestvideo`);
+          else
+            args.push(
+              "-f",
+              `bestvideo[height<=${h}]+bestaudio/best[height<=${h}]`,
+            );
+        } else if (videoOnly) {
+          args.push("-f", "bestvideo/bestvideo");
         }
 
         let tmpListPath = null;
@@ -852,7 +922,10 @@ export function createAppServer({
 
         if (cookiesFromBrowser) {
           if (!["chrome", "edge", "firefox"].includes(cookiesFromBrowser)) {
-            return badRequest(res, "cookiesFromBrowser must be one of: chrome, edge, firefox");
+            return badRequest(
+              res,
+              "cookiesFromBrowser must be one of: chrome, edge, firefox",
+            );
           }
           args.unshift("--cookies-from-browser", cookiesFromBrowser);
         }
@@ -866,7 +939,10 @@ export function createAppServer({
               fs.unlinkSync(tmpListPath);
             } catch {}
           }
-          jobAppend(jobId, `Failed to start yt-dlp (${ytDlpCommand}). Set YTDLP_BIN to full path. ${e?.message || ""}`.trim());
+          jobAppend(
+            jobId,
+            `Failed to start yt-dlp (${ytDlpCommand}). Set YTDLP_BIN to full path. ${e?.message || ""}`.trim(),
+          );
           jobDone(jobId, -1);
           return json(res, 200, { jobId, count: isBulk ? validIds.length : 1 });
         }
@@ -887,7 +963,11 @@ export function createAppServer({
               fs.unlinkSync(tmpListPath);
             } catch {}
           }
-          jobAppend(jobId, `yt-dlp spawn error: ${err?.code || ""} ${err?.message || ""}`.trim());
+          const errAny = /** @type {any} */ (err);
+          jobAppend(
+            jobId,
+            `yt-dlp spawn error: ${errAny?.code || ""} ${errAny?.message || ""}`.trim(),
+          );
           jobDone(jobId, -1);
         });
 
@@ -900,7 +980,11 @@ export function createAppServer({
           jobDone(jobId, typeof code === "number" ? code : -1);
         });
 
-        return json(res, 200, { jobId, count: isBulk ? validIds.length : 1, downloadsDir: jobDir });
+        return json(res, 200, {
+          jobId,
+          count: isBulk ? validIds.length : 1,
+          downloadsDir: jobDir,
+        });
       }
 
       const filesMatch = pathname.match(/^\/api\/files\/([a-z0-9]+)$/);
@@ -921,7 +1005,9 @@ export function createAppServer({
         }
         return json(res, 200, {
           files,
-          downloadUrls: files.map((f) => `/api/file/${jobId}/${encodeURIComponent(f)}`),
+          downloadUrls: files.map(
+            (f) => `/api/file/${jobId}/${encodeURIComponent(f)}`,
+          ),
         });
       }
 
@@ -975,14 +1061,18 @@ export function createAppServer({
   return {
     server,
     close: () =>
-      new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
+      new Promise((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve())),
+      ),
   };
 }
 
 // Run directly: `node tools/ytdlp-ui/server.mjs`
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.YTDLP_UI_PORT || process.env.PORT || 8787);
-  const host = String(process.env.YTDLP_UI_HOST || process.env.HOST || "0.0.0.0");
+  const host = String(
+    process.env.YTDLP_UI_HOST || process.env.HOST || "0.0.0.0",
+  );
   const { server } = createAppServer();
   let currentPort = port;
   let attemptsLeft = 15;
@@ -995,7 +1085,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   };
 
   server.on("error", (err) => {
-    if (err && err.code === "EADDRINUSE" && attemptsLeft > 0) {
+    const errAny = /** @type {any} */ (err);
+    if (errAny && errAny.code === "EADDRINUSE" && attemptsLeft > 0) {
       attemptsLeft -= 1;
       currentPort += 1;
       // eslint-disable-next-line no-console
@@ -1012,5 +1103,3 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
   tryListen();
 }
-
-

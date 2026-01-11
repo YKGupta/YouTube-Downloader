@@ -12,14 +12,22 @@
     "start": "node server.mjs",
     "dev": "node server.mjs",
     "cli": "node cli.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "engines": {
     "node": ">=18"
   },
   "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@types/node": "^22.10.10",
+    "eslint": "^9.20.1",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
     "vitest": "^3.1.3"
   }
 }
-
-

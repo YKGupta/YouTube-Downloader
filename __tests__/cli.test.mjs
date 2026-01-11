@@ -9,11 +9,15 @@ describe("ytdlp-ui CLI", () => {
   });
 
   it("parses host/port forms", () => {
-    expect(parseArgs(["node", "cli.mjs", "--host", "0.0.0.0", "--port", "9999"])).toEqual({
+    expect(
+      parseArgs(["node", "cli.mjs", "--host", "0.0.0.0", "--port", "9999"]),
+    ).toEqual({
       host: "0.0.0.0",
       port: 9999,
     });
-    expect(parseArgs(["node", "cli.mjs", "--host=127.0.0.1", "--port=8787"])).toEqual({
+    expect(
+      parseArgs(["node", "cli.mjs", "--host=127.0.0.1", "--port=8787"]),
+    ).toEqual({
       host: "127.0.0.1",
       port: 8787,
     });
@@ -21,8 +25,8 @@ describe("ytdlp-ui CLI", () => {
 
   it("parses --open/--no-open", () => {
     expect(parseArgs(["node", "cli.mjs", "--open"])).toEqual({ open: true });
-    expect(parseArgs(["node", "cli.mjs", "--no-open"])).toEqual({ open: false });
+    expect(parseArgs(["node", "cli.mjs", "--no-open"])).toEqual({
+      open: false,
+    });
   });
 });
-
-
