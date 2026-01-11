@@ -256,18 +256,66 @@
       a { color: inherit; text-decoration: none; opacity: 0.9; }
       a:hover { text-decoration: underline; opacity: 1; }
 
+      .log-shell {
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: #0b0b0d;
+        overflow: hidden;
+      }
       .log {
-        height: 220px;
+        max-height: 180px;
         overflow: auto;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         font-size: 12px;
-        white-space: pre-wrap;
-        border-radius: var(--radius);
-        border: 1px solid var(--border);
-        background: color-mix(in oklab, var(--panel) 88%, transparent);
+        white-space: pre;
         padding: 12px;
-        color: color-mix(in oklab, var(--text) 84%, var(--muted));
+        color: #e5e7eb;
+        scrollbar-gutter: stable both-edges;
       }
+      /* Terminal-like scrollbar (supported in modern Chromium/Firefox) */
+      .log { scrollbar-width: thin; scrollbar-color: rgba(229,231,235,0.28) rgba(255,255,255,0.06); }
+      .log::-webkit-scrollbar { width: 10px; height: 10px; }
+      .log::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 999px; }
+      .log::-webkit-scrollbar-thumb { background: rgba(229,231,235,0.22); border-radius: 999px; border: 2px solid rgba(255,255,255,0.06); }
+      .log::-webkit-scrollbar-thumb:hover { background: rgba(229,231,235,0.32); }
+      .log-line { display: flex; gap: 10px; align-items: flex-start; padding: 2px 0; }
+      .log-line:hover { background: rgba(255,255,255,0.03); }
+      .log-tag {
+        flex: 0 0 auto;
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: rgba(229,231,235,0.6);
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(255,255,255,0.04);
+        border-radius: 999px;
+        padding: 2px 8px;
+      }
+      .log-msg { flex: 1 1 auto; color: rgba(229,231,235,0.88); white-space: pre; }
+      .log-tag.download { color: #34d399; border-color: rgba(52,211,153,0.28); background: rgba(52,211,153,0.08); }
+      .log-tag.merger, .log-tag.extractaudio { color: #60a5fa; border-color: rgba(96,165,250,0.28); background: rgba(96,165,250,0.08); }
+      .log-tag.warning { color: #fbbf24; border-color: rgba(251,191,36,0.28); background: rgba(251,191,36,0.08); }
+      .log-tag.error { color: #fb7185; border-color: rgba(251,113,133,0.28); background: rgba(251,113,133,0.08); }
+      .log-tag.done { color: #a78bfa; border-color: rgba(167,139,250,0.28); background: rgba(167,139,250,0.08); }
+
+      .log-downloadbar {
+        flex: 0 0 120px;
+        height: 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(255,255,255,0.06);
+        overflow: hidden;
+        align-self: center;
+      }
+      .log-downloadbar > span {
+        display: block;
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, rgba(52,211,153,0.55), rgba(52,211,153,1));
+        border-radius: 999px;
+        transition: width 140ms ease;
+      }
+      .log-pct { flex: 0 0 auto; color: rgba(229,231,235,0.6); font-variant-numeric: tabular-nums; }
 
       .footer-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
       .hint { color: var(--muted2); font-size: 12px; }
@@ -398,7 +446,9 @@
                   </svg>
                   Show log
                 </summary>
-                <div class="log" id="log" style="margin-top: 10px;"></div>
+                <div class="log-shell" style="margin-top: 10px;">
+                  <div class="log" id="log"></div>
+                </div>
               </details>
           </div>
           </div>
@@ -473,7 +523,11 @@
         evt: null,
         currentVideoOk: false,
         mode: "video",
+        liveDownloadEl: null,
+        logLines: 0,
       };
+
+      const LOG_MAX_LINES = 1000;
 
       function setBtnLoading(btnId, isLoading, labelWhenIdle) {
         const b = el(btnId);
@@ -501,16 +555,97 @@
 
       function log(line) {
         const box = el("log");
-        if (box) {
-          const normalized = String(line)
-            .replace(/\\r\\n/g, "\n")
-            .replace(/\\n/g, "\n")
-            .replace(/\\r/g, "\n");
-          box.textContent += normalized + "\n";
-          box.scrollTop = box.scrollHeight;
+        if (!box) return;
+
+        const normalized = String(line)
+          .replace(/\\r\\n/g, "\n")
+          .replace(/\\n/g, "\n")
+          .replace(/\\r/g, "\n")
+          .trimEnd();
+
+        // Split any multi-line chunks into separate log lines.
+        for (const raw of normalized.split("\n")) {
+          const l = raw.trimEnd();
+          if (!l) continue;
+
+          const m = l.match(/^\[([^\]]+)\]\s*(.*)$/);
+          const tagRaw = m ? m[1] : "log";
+          const msg = m ? m[2] : l;
+          const tag = String(tagRaw).toLowerCase().replace(/\s+/g, "");
+
+          const pctMatch = l.match(/(\d+(?:\.\d+)?)%/);
+          const percent = pctMatch ? Number(pctMatch[1]) : null;
+
+          // Render download progress in-place.
+          if (tag === "download" && percent !== null && Number.isFinite(percent)) {
+            let row = state.liveDownloadEl;
+            if (!row) {
+              row = document.createElement("div");
+              row.className = "log-line";
+
+              const t = document.createElement("span");
+              t.className = "log-tag download";
+              t.textContent = "download";
+
+              const mEl = document.createElement("span");
+              mEl.className = "log-msg";
+
+              const bar = document.createElement("span");
+              bar.className = "log-downloadbar";
+              const fill = document.createElement("span");
+              bar.appendChild(fill);
+
+              const pct = document.createElement("span");
+              pct.className = "log-pct";
+
+              row.appendChild(t);
+              row.appendChild(mEl);
+              row.appendChild(bar);
+              row.appendChild(pct);
+
+              box.appendChild(row);
+              state.logLines += 1;
+              state.liveDownloadEl = row;
+            }
+
+            const msgEl = row.children[1];
+            const fillEl = row.children[2].firstChild;
+            const pctEl = row.children[3];
+            msgEl.textContent = msg;
+            fillEl.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+            pctEl.textContent = `${percent.toFixed(1)}%`.replace(".0%", "%");
+
+            setProgress({ running: true, percent });
+          } else {
+            const row = document.createElement("div");
+            row.className = "log-line";
+
+            const t = document.createElement("span");
+            t.className = `log-tag ${tag}`;
+            t.textContent = tagRaw;
+
+            const mEl = document.createElement("span");
+            mEl.className = "log-msg";
+            mEl.textContent = msg;
+
+            row.appendChild(t);
+            row.appendChild(mEl);
+            box.appendChild(row);
+            state.logLines += 1;
+
+            // Stop "live" download updates once we hit non-download lines like Merger/Done.
+            if (tag !== "download") state.liveDownloadEl = null;
+
+            if (percent !== null && Number.isFinite(percent)) setProgress({ running: true, percent });
+          }
+
+          while (state.logLines > LOG_MAX_LINES && box.firstChild) {
+            box.removeChild(box.firstChild);
+            state.logLines -= 1;
+          }
         }
-        const m = String(line).match(/(\d+(?:\.\d+)?)%/);
-        if (m) setProgress({ running: true, percent: Number(m[1]) });
+
+        box.scrollTop = box.scrollHeight;
       }
 
       function setStatus(s) {
@@ -753,7 +888,9 @@
       el("downloadPlaylistBtn").addEventListener("click", () => startPlaylistDownload().catch((e) => { setStatus("Error"); alert(e.message); }));
       el("clearLogBtn").addEventListener("click", () => {
         const box = el("log");
-        if (box) box.textContent = "";
+        if (box) box.replaceChildren();
+        state.logLines = 0;
+        state.liveDownloadEl = null;
         setProgress({ running: false, percent: null, text: "Idle" });
       });
 
