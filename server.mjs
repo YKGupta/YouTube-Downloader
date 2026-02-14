@@ -131,6 +131,38 @@ function safeBasename(name) {
     .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_");
 }
 
+function stripOuterQuotes(s) {
+  const str = String(s || "");
+  if (str.length >= 2 && str.startsWith('"') && str.endsWith('"'))
+    return str.slice(1, -1);
+  if (str.length >= 2 && str.startsWith("'") && str.endsWith("'"))
+    return str.slice(1, -1);
+  return str;
+}
+
+function extractFilepathFromYtDlpLine(line) {
+  const s = String(line || "").trim();
+  if (!s) return null;
+
+  const marker = "__YTDLP_UI_FILE__:";
+  if (s.startsWith(marker)) return s.slice(marker.length).trim();
+
+  // Common yt-dlp output lines that include final/target paths.
+  const downloadDest = s.match(/^\[download\]\s+Destination:\s+(.+)$/);
+  if (downloadDest) return downloadDest[1].trim();
+
+  const extractAudioDest = s.match(/^\[ExtractAudio\]\s+Destination:\s+(.+)$/);
+  if (extractAudioDest) return extractAudioDest[1].trim();
+
+  const ffmpegDest = s.match(/^\[ffmpeg\]\s+Destination:\s+(.+)$/);
+  if (ffmpegDest) return ffmpegDest[1].trim();
+
+  const mergerInto = s.match(/^\[Merger\]\s+Merging formats into\s+"(.+)"$/);
+  if (mergerInto) return mergerInto[1].trim();
+
+  return null;
+}
+
 function classifyNotAllowedMessage(_stderrOrOut) {
   return "Not allowed to download this video by the creator";
 }
@@ -526,7 +558,7 @@ export function createAppServer({
   indexHtml = loadPublicIndexHtml() || defaultIndexHtml(),
   downloadsBaseDir = null,
 } = {}) {
-  /** @type {Map<string, { id: string, createdAt: number, lines: string[], sseClients: Set<import("node:http").ServerResponse>, downloadsDir: string | null, done?: { exitCode: number | null } }>} */
+  /** @type {Map<string, { id: string, createdAt: number, lines: string[], sseClients: Set<import("node:http").ServerResponse>, downloadsDir: string | null, files: string[], done?: { exitCode: number | null } }>} */
   const jobs = new Map();
 
   function jobAppend(jobId, line) {
@@ -857,23 +889,18 @@ export function createAppServer({
           lines: [],
           sseClients: new Set(),
           downloadsDir: null,
+          files: [],
         };
         jobs.set(jobId, job);
 
         const baseDownloadsDir = downloadsBaseDir || getDefaultDownloadsDir();
-        const jobDir = path.join(baseDownloadsDir, "ytdlp-ui", jobId);
         try {
-          fs.mkdirSync(jobDir, { recursive: true });
+          fs.mkdirSync(baseDownloadsDir, { recursive: true });
         } catch {
           // ignore
         }
-        job.downloadsDir = jobDir;
+        job.downloadsDir = baseDownloadsDir;
 
-        const archivePath = path.join(
-          baseDownloadsDir,
-          "ytdlp-ui",
-          ".ytdlp-archive.txt",
-        );
         const outputTemplate = "%(upload_date)s - %(title)s [%(id)s].%(ext)s";
 
         /** @type {string[]} */
@@ -882,12 +909,12 @@ export function createAppServer({
           "--yes-playlist",
           "--newline",
           "--no-warnings",
-          "--download-archive",
-          archivePath,
           "-P",
-          jobDir,
+          baseDownloadsDir,
           "-o",
           outputTemplate,
+          "--print",
+          "after_move:__YTDLP_UI_FILE__:%(filepath)s",
         ];
 
         if (mp3) {
@@ -952,7 +979,26 @@ export function createAppServer({
 
         const onData = (chunk) => {
           const lines = String(chunk).split(/\r?\n/).filter(Boolean);
-          for (const line of lines) jobAppend(jobId, line);
+          for (const line of lines) {
+            const fp = extractFilepathFromYtDlpLine(line);
+            if (fp) {
+              const basename = safeBasename(
+                path.basename(stripOuterQuotes(fp)),
+              );
+              const job = jobs.get(jobId);
+              if (job && basename && !job.files.includes(basename)) {
+                job.files.push(basename);
+              }
+              // Don't spam the log with filepath markers.
+              if (
+                String(line || "")
+                  .trim()
+                  .startsWith("__YTDLP_UI_FILE__:")
+              )
+                continue;
+            }
+            jobAppend(jobId, line);
+          }
         };
         child.stdout.on("data", onData);
         child.stderr.on("data", onData);
@@ -983,7 +1029,7 @@ export function createAppServer({
         return json(res, 200, {
           jobId,
           count: isBulk ? validIds.length : 1,
-          downloadsDir: jobDir,
+          downloadsDir: baseDownloadsDir,
         });
       }
 
@@ -994,15 +1040,16 @@ export function createAppServer({
         if (!job) return badRequest(res, "Unknown jobId");
         const dir = job.downloadsDir;
         if (!dir) return json(res, 200, { files: [] });
-        let files = [];
-        try {
-          files = fs
-            .readdirSync(dir, { withFileTypes: true })
-            .filter((d) => d.isFile())
-            .map((d) => d.name);
-        } catch {
-          files = [];
-        }
+        const files = (Array.isArray(job.files) ? job.files : []).filter(
+          (f) => {
+            const full = path.join(dir, safeBasename(f));
+            try {
+              return fs.statSync(full).isFile();
+            } catch {
+              return false;
+            }
+          },
+        );
         return json(res, 200, {
           files,
           downloadUrls: files.map(

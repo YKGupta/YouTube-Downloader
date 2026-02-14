@@ -65,7 +65,7 @@ function makeFakeSpawner({
     const isInfo = args.includes("-J");
     const isList =
       args.includes("--flat-playlist") && args.includes("--dump-json");
-    const isDownload = args.includes("-a") && args.includes("--newline");
+    const isDownload = args.includes("--newline") && !isInfo && !isList;
 
     queueMicrotask(() => {
       if (isInfo && infoJson) {
@@ -282,6 +282,48 @@ describe("ytdlp-ui server", () => {
   );
 
   it(
+    "POST /api/download downloads directly into downloadsBaseDir (no archive file) and lists files",
+    async () => {
+      const { createAppServer } = await import("../server.mjs");
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ytdlp-ui-test-"));
+
+      const outFile = path.join(tmp, "sample [f4g1xtyY3uo].mp4");
+      const fakeSpawn = makeFakeSpawner({
+        downloadLines: [`[download] Destination: ${outFile}`],
+      });
+
+      const app = createAppServer({
+        spawnYtDlp: fakeSpawn,
+        downloadsBaseDir: tmp,
+      });
+      const s = await listen(app);
+
+      const res = await fetch(`${s.url}/api/download`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://example.com/watch?v=f4g1xtyY3uo",
+          quality: 720,
+          mp3: false,
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+
+      // Simulate yt-dlp having created the file on disk.
+      fs.writeFileSync(outFile, "x");
+
+      const filesRes = await fetch(`${s.url}/api/files/${body.jobId}`);
+      expect(filesRes.status).toBe(200);
+      const filesBody = await filesRes.json();
+      expect(filesBody.files).toContain(path.basename(outFile));
+
+      await s.close();
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
     "POST /api/download with videoOnly uses bestvideo and remuxes to mp4",
     async () => {
       const { createAppServer } = await import("../server.mjs");
@@ -307,6 +349,11 @@ describe("ytdlp-ui server", () => {
 
       const downloadCall = rec.calls.find((a) => a.includes("--newline"));
       expect(downloadCall).toBeTruthy();
+      expect(downloadCall).not.toContain("--download-archive");
+      expect(downloadCall.join(" ")).not.toMatch(/ytdlp-archive/i);
+      const pIdx = downloadCall.indexOf("-P");
+      expect(pIdx).toBeGreaterThanOrEqual(0);
+      expect(downloadCall[pIdx + 1]).toBe(tmp);
       expect(downloadCall).toContain("--remux-video");
       expect(downloadCall).toContain("mp4");
       expect(downloadCall).toContain("-f");
